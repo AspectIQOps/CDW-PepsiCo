@@ -1,20 +1,14 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/opt/appd-licensing"
-SEED_SRC="/home/ubuntu/repo/postgres/seed_all_tables.sql"
-SEED_DEST="$APP_DIR/postgres/seed_all_tables.sql"
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="/opt/appd-licensing"
 
 echo "🔄 Updating system packages..."
 sudo apt update && sudo apt -y upgrade
 
-echo "📁 Creating application directory structure..."
-sudo mkdir -p $APP_DIR/scripts
-sudo mkdir -p $APP_DIR/postgres
-sudo mkdir -p $APP_DIR/logs
-sudo chown -R $USER:$USER $APP_DIR
-
-echo "🐍 Installing Python, PostgreSQL, and required tools..."
+echo "🐍 Installing Python and required tools..."
 sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common
 
 echo "🗄️ Setting up PostgreSQL database and user..."
@@ -27,7 +21,6 @@ CREATE DATABASE appd_licensing OWNER postgres;
 
 \c appd_licensing
 
--- Create schemas & tables
 CREATE SCHEMA IF NOT EXISTS public;
 
 -- Capabilities dimension
@@ -110,6 +103,17 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
     rows_ingested INT
 );
 
+-- Snow ETL audit log
+CREATE TABLE IF NOT EXISTS etl_audit_log (
+    id SERIAL PRIMARY KEY,
+    script_name TEXT NOT NULL,
+    run_timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+    service_count INT,
+    inserted_count INT,
+    status TEXT NOT NULL,
+    error_message TEXT
+);
+
 -- Data lineage
 CREATE TABLE IF NOT EXISTS data_lineage (
     lineage_id SERIAL PRIMARY KEY,
@@ -137,52 +141,37 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE O
 SQL
 
 echo "🐍 Setting up Python virtual environment..."
-python3 -m venv $APP_DIR/etl_env
-source $APP_DIR/etl_env/bin/activate
+sudo mkdir -p "$BASE_DIR"
+sudo chown -R "$SUDO_USER":"$SUDO_USER" "$BASE_DIR"
+python3 -m venv "$BASE_DIR/etl_env"
+source "$BASE_DIR/etl_env/bin/activate"
 pip install --upgrade pip
 pip install requests pandas psycopg2-binary python-dotenv
 
-echo "📦 Installing Grafana..."
-if ! grep -q "packages.grafana.com" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-    sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
-    wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
-    sudo apt update
-fi
+echo "🔧 Installing Grafana..."
+sudo add-apt-repository -y "deb https://packages.grafana.com/oss/deb stable main"
+wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+sudo apt update
 sudo apt -y install grafana
 
-echo "🔹 Enabling and starting Grafana..."
+echo "🔹 Enable and start Grafana..."
 sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
 sudo systemctl start grafana-server
 
-echo "📥 Preparing seed script..."
-if [ -f "$SEED_SRC" ]; then
-    echo "📦 Copying seed file from repo to $SEED_DEST..."
-    sudo mkdir -p "$(dirname "$SEED_DEST")"
-    sudo cp "$SEED_SRC" "$SEED_DEST"
-    sudo chown postgres:postgres "$SEED_DEST"
+echo "🌱 Preparing seed script..."
+SEED_SRC="$SCRIPT_DIR/../postgres/seed_all_tables.sql"
+SEED_TMP="/tmp/seed_all_tables.sql"
+if [[ -f "$SEED_SRC" ]]; then
+    sudo cp "$SEED_SRC" "$SEED_TMP"
+    sudo chown postgres:postgres "$SEED_TMP"
+    echo "🌱 Running seed script..."
+    sudo -u postgres psql -d appd_licensing -f "$SEED_TMP"
+    echo "✅ Seed data inserted successfully."
 else
-    echo "⚠️ No seed file found in repo at $SEED_SRC"
+    echo "⚠️ Seed file not found at $SEED_SRC. Skipping seed step."
 fi
-
-echo "🌱 Running seed script..."
-if [ -f "$SEED_DEST" ]; then
-    echo "Found seed file at $SEED_DEST. Seeding database..."
-    sudo -u postgres psql -d appd_licensing -f "$SEED_DEST"
-    echo "✅ Database seeded successfully."
-else
-    echo "⚠️ Seed file not found at $SEED_DEST. Skipping seed step."
-fi
-
-echo "🔍 Running ETL stack health check..."
-POSTGRES_STATUS=$(sudo systemctl is-active postgresql)
-GRAFANA_STATUS=$(sudo systemctl is-active grafana-server)
-PYTHON_VERSION=$(python3 --version)
-
-echo "PostgreSQL service: $POSTGRES_STATUS"
-echo "Grafana service: $GRAFANA_STATUS"
-echo "Python version: $PYTHON_VERSION"
 
 echo "✅ ETL stack setup complete!"
 echo "To test database connectivity, run:"
-echo "source $APP_DIR/etl_env/bin/activate && python -c 'import psycopg2; psycopg2.connect(dbname=\"appd_licensing\", user=\"appd_ro\", password=\"ChangeMe123!\", host=\"localhost\", port=5432); print(\"✅ Database connection OK\")'"
+echo "source $BASE_DIR/etl_env/bin/activate && python -c 'import psycopg2; psycopg2.connect(dbname=\"appd_licensing\", user=\"appd_ro\", password=\"ChangeMe123!\", host=\"localhost\", port=5432); print(\"✅ Database connection OK\")'"

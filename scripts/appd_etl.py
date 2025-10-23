@@ -1,9 +1,10 @@
-import os, requests, psycopg2
+import os
+import requests
+import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Load .env from project root
-project_root = "/Users/home/Desktop/Work/GitHub/CDW-PepsiCo"
+project_root = "/opt/appd-licensing"
 load_dotenv(os.path.join(project_root, '.env'))
 
 CTRL = os.getenv('APPD_CONTROLLER')
@@ -12,20 +13,13 @@ CID = os.getenv('APPD_CLIENT_ID')
 CSEC = os.getenv('APPD_CLIENT_SECRET')
 PG_DSN = os.getenv('PG_DSN')
 
-
 def token():
-    r = requests.post(
-        f"https://{CTRL}/controller/api/oauth/access_token",
-        data={
-            "grant_type": "client_credentials",
-            "client_id": f"{CID}@{ACCOUNT}",
-            "client_secret": CSEC
-        },
-        timeout=60
-    )
+    r = requests.post(f"https://{CTRL}/controller/api/oauth/access_token",
+                      data={"grant_type":"client_credentials",
+                            "client_id":f"{CID}@{ACCOUNT}",
+                            "client_secret":CSEC}, timeout=60)
     r.raise_for_status()
     return r.json()['access_token']
-
 
 def get(tok, path):
     headers = {"Authorization": f"Bearer {tok}"}
@@ -33,61 +27,32 @@ def get(tok, path):
     r.raise_for_status()
     return r.json()
 
-
 def upsert_usage(conn, records, endpoint):
     cur = conn.cursor()
-    rows = 0
-
-    cur.execute("""
-        INSERT INTO etl_execution_log(job_name, started_at, status)
-        VALUES('appd_license_pull', now(), 'RUNNING')
-        RETURNING run_id
-    """)
+    cur.execute("INSERT INTO etl_execution_log(job_name, started_at, status) VALUES('appd_license_pull', now(), 'RUNNING') RETURNING run_id")
     run_id = cur.fetchone()[0]
-
+    rows = 0
     for rec in records:
-        # Minimal demo mapping — adapt to your controller fields
-        m = {
-            'ts': datetime.utcnow(),
-            'app_id': rec.get('app_id', 1),
-            'capability_id': 1,
-            'tier': rec.get('tier', 'PRO'),
-            'units': float(rec.get('units', 0)),
-            'nodes': int(rec.get('nodes', 0))
-        }
-
+        m = {'ts': datetime.utcnow(), 'app_id': rec.get('app_id',1),
+             'capability_id':1, 'tier': rec.get('tier','PRO'),
+             'units': float(rec.get('units',0)), 'nodes': int(rec.get('nodes',0))}
         cur.execute("""
             INSERT INTO license_usage_fact(ts, app_id, capability_id, tier, units, nodes)
-            VALUES(%(ts)s, %(app_id)s, %(capability_id)s, %(tier)s, %(units)s, %(nodes)s)
+            VALUES(%(ts)s,%(app_id)s,%(capability_id)s,%(tier)s,%(units)s,%(nodes)s)
             ON CONFLICT (ts, app_id, capability_id, tier)
             DO UPDATE SET units = excluded.units, nodes = excluded.nodes
         """, m)
-
         cur.execute("""
             INSERT INTO data_lineage(run_id, source_system, source_endpoint, target_table, target_pk)
-            VALUES (%s, 'appd', %s, 'license_usage_fact', json_build_object('app_id', %s))
+            VALUES (%s, 'AppDynamics', %s, 'license_usage_fact', json_build_object('app_id', %s))
         """, (run_id, endpoint, m['app_id']))
-
         rows += 1
-
-    cur.execute("""
-        UPDATE etl_execution_log
-        SET finished_at = now(), status = 'SUCCESS', rows_ingested = %s
-        WHERE run_id = %s
-    """, (rows, run_id))
-
+    cur.execute("UPDATE etl_execution_log SET finished_at = now(), status='SUCCESS', rows_ingested=%s WHERE run_id=%s", (rows, run_id))
     conn.commit()
-
 
 if __name__ == '__main__':
     t = token()
-
-    # Try known endpoints until one works
-    endpoints = [
-        "/controller/rest/licenses/usage?output=JSON",
-        "/controller/rest/licenses?output=JSON"
-    ]
-
+    endpoints = ["/controller/rest/licenses/usage?output=JSON", "/controller/rest/licenses?output=JSON"]
     payload = None
     ep_used = None
     for ep in endpoints:
@@ -97,11 +62,9 @@ if __name__ == '__main__':
             break
         except Exception:
             continue
-
     if payload is None:
         raise SystemExit('No licensing endpoint responded with JSON')
-
     with psycopg2.connect(PG_DSN) as conn:
-        # For demo, insert a single placeholder record
-        sample = [{"app_id": 1, "tier": "PRO", "units": 10, "nodes": 5}]
+        # Placeholder demo record
+        sample = [{"app_id":1,"tier":"PRO","units":10,"nodes":5}]
         upsert_usage(conn, sample, ep_used)
