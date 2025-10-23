@@ -4,14 +4,24 @@ import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 
-project_root = "/opt/appd-licensing"
-load_dotenv(os.path.join(project_root, '.env'))
+# --- Load .env from /opt/appd-licensing ---
+ENV_PATH = "/opt/appd-licensing/.env"
+if not os.path.isfile(ENV_PATH):
+    raise SystemExit(f"❌ .env file not found at {ENV_PATH}")
+
+load_dotenv(ENV_PATH)
 
 CTRL = os.getenv('APPD_CONTROLLER')
 ACCOUNT = os.getenv('APPD_ACCOUNT')
 CID = os.getenv('APPD_CLIENT_ID')
 CSEC = os.getenv('APPD_CLIENT_SECRET')
-PG_DSN = os.getenv('PG_DSN')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+
+PG_DSN = f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST} port={DB_PORT}"
 
 def token():
     r = requests.post(f"https://{CTRL}/controller/api/oauth/access_token",
@@ -64,7 +74,10 @@ if __name__ == '__main__':
             continue
     if payload is None:
         raise SystemExit('No licensing endpoint responded with JSON')
+
     with psycopg2.connect(PG_DSN) as conn:
         # Placeholder demo record
         sample = [{"app_id":1,"tier":"PRO","units":10,"nodes":5}]
         upsert_usage(conn, sample, ep_used)
+
+    print("✅ AppDynamics licensing ETL complete")

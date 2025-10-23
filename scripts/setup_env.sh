@@ -3,36 +3,39 @@ set -e
 
 # --- Detect paths dynamically ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-POSTGRES_DIR="$PROJECT_ROOT/postgres"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+POSTGRES_DIR="$REPO_DIR/postgres"
+ENV_FILE="$REPO_DIR/.env"
 BASE_DIR="/opt/appd-licensing"
 
-# --- Load environment variables ---
-ENV_FILE="$PROJECT_ROOT/.env"
 if [[ ! -f "$ENV_FILE" ]]; then
-    echo "❌ .env file not found at $ENV_FILE. Populate it with DB and AppD credentials first."
+    echo "❌ .env file not found at $ENV_FILE. Please copy .env.example to .env and populate credentials."
     exit 1
 fi
+
+# --- Load .env variables ---
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 echo "🔄 Updating system packages..."
 sudo apt update && sudo apt -y upgrade
 
-echo "🐍 Installing Python and required tools..."
+echo "🐍 Installing Python, PostgreSQL, and required tools..."
 sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common
 
 echo "🗄️ Setting up PostgreSQL database and user..."
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
 sudo -u postgres psql <<SQL
-DROP DATABASE IF EXISTS ${DB_NAME:-appd_licensing};
-DROP ROLE IF EXISTS ${DB_USER:-appd_ro};
+DROP DATABASE IF EXISTS ${DB_NAME};
+DROP ROLE IF EXISTS ${DB_USER};
 
-CREATE ROLE ${DB_USER:-appd_ro} LOGIN PASSWORD '${DB_PASSWORD:-ChangeMe123!}';
-CREATE DATABASE ${DB_NAME:-appd_licensing} OWNER postgres;
+CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASSWORD}';
+CREATE DATABASE ${DB_NAME} OWNER postgres;
 SQL
 
 echo "🐍 Setting up Python virtual environment..."
 sudo mkdir -p "$BASE_DIR"
-sudo chown -R "$USER":"$USER" "$BASE_DIR"
+sudo chown -R "$SUDO_USER":"$SUDO_USER" "$BASE_DIR"
 python3 -m venv "$BASE_DIR/etl_env"
 source "$BASE_DIR/etl_env/bin/activate"
 pip install --upgrade pip
@@ -56,7 +59,7 @@ if [[ -f "$TABLE_SQL" ]]; then
     cp "$TABLE_SQL" "$TMP_SQL"
     sudo chown postgres:postgres "$TMP_SQL"
     echo "🌱 Creating database tables..."
-    sudo -u postgres psql -d ${DB_NAME:-appd_licensing} -f "$TMP_SQL"
+    sudo -u postgres psql -d "${DB_NAME}" -f "$TMP_SQL"
     echo "✅ Database tables created successfully."
 else
     echo "⚠️ Table creation SQL not found at $TABLE_SQL. Skipping."
@@ -69,7 +72,7 @@ if [[ -f "$SEED_SQL" ]]; then
     cp "$SEED_SQL" "$TMP_SEED"
     sudo chown postgres:postgres "$TMP_SEED"
     echo "🌱 Seeding database tables..."
-    sudo -u postgres psql -d ${DB_NAME:-appd_licensing} -f "$TMP_SEED"
+    sudo -u postgres psql -d "${DB_NAME}" -f "$TMP_SEED"
     echo "✅ Database tables seeded successfully."
 else
     echo "⚠️ Seed SQL not found at $SEED_SQL. Skipping."
@@ -77,4 +80,4 @@ fi
 
 echo "✅ Environment setup complete!"
 echo "Activate Python venv: source $BASE_DIR/etl_env/bin/activate"
-echo "Grafana is running at http://<EC2_PUBLIC_IP>:3000 (default admin/admin)"
+echo "Check Grafana UI at http://<EC2_PUBLIC_IP>:3000 (default admin/admin)"
