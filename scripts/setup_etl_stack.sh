@@ -1,77 +1,188 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting ETL stack setup..."
+APP_DIR="/opt/appd-licensing"
+SEED_SRC="/home/ubuntu/repo/postgres/seed_all_tables.sql"
+SEED_DEST="$APP_DIR/postgres/seed_all_tables.sql"
 
-# --- 1. Update OS and install required packages ---
-echo "📦 Updating system and installing dependencies..."
-sudo apt update -y
-sudo apt upgrade -y
-sudo apt install -y git python3 python3-venv python3-pip \
-                    postgresql postgresql-contrib \
-                    docker.io docker-compose curl unzip
+echo "🔄 Updating system packages..."
+sudo apt update && sudo apt -y upgrade
 
-# --- 2. Enable and start PostgreSQL ---
-echo "🗃️ Setting up PostgreSQL service..."
-sudo systemctl enable postgresql
-sudo systemctl start postgresql
+echo "📁 Creating application directory structure..."
+sudo mkdir -p $APP_DIR/scripts
+sudo mkdir -p $APP_DIR/postgres
+sudo mkdir -p $APP_DIR/logs
+sudo chown -R $USER:$USER $APP_DIR
 
-# --- 3. Set up PostgreSQL database and user ---
-echo "🗄️ Creating database and roles..."
-sudo -i -u postgres psql <<EOF
-CREATE DATABASE appd_licensing;
-CREATE ROLE appd_ro WITH LOGIN PASSWORD 'ChangeMe123!';
+echo "🐍 Installing Python, PostgreSQL, and required tools..."
+sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common
+
+echo "🗄️ Setting up PostgreSQL database and user..."
+sudo -u postgres psql <<'SQL'
+DROP DATABASE IF EXISTS appd_licensing;
+DROP ROLE IF EXISTS appd_ro;
+
+CREATE ROLE appd_ro LOGIN PASSWORD 'ChangeMe123!';
+CREATE DATABASE appd_licensing OWNER postgres;
+
+\c appd_licensing
+
+-- Create schemas & tables
+CREATE SCHEMA IF NOT EXISTS public;
+
+-- Capabilities dimension
+CREATE TABLE IF NOT EXISTS capabilities_dim (
+    capability_id SERIAL PRIMARY KEY,
+    capability_code TEXT UNIQUE NOT NULL,
+    description TEXT
+);
+
+-- Applications dimension
+CREATE TABLE IF NOT EXISTS applications_dim (
+    app_id SERIAL PRIMARY KEY,
+    appd_application_id INT,
+    appd_application_name TEXT,
+    sn_sys_id TEXT,
+    sn_service_name TEXT,
+    h_code TEXT,
+    sector TEXT
+);
+
+-- Time dimension
+CREATE TABLE IF NOT EXISTS time_dim (
+    ts TIMESTAMP PRIMARY KEY,
+    y INT,
+    m INT,
+    d INT,
+    yyyy_mm TEXT
+);
+
+-- License usage fact
+CREATE TABLE IF NOT EXISTS license_usage_fact (
+    ts TIMESTAMP NOT NULL,
+    app_id INT REFERENCES applications_dim(app_id),
+    capability_id INT REFERENCES capabilities_dim(capability_id),
+    tier TEXT,
+    units NUMERIC,
+    nodes INT,
+    PRIMARY KEY(ts, app_id, capability_id, tier)
+);
+
+-- License cost fact
+CREATE TABLE IF NOT EXISTS license_cost_fact (
+    ts TIMESTAMP,
+    app_id INT REFERENCES applications_dim(app_id),
+    capability_id INT REFERENCES capabilities_dim(capability_id),
+    tier TEXT,
+    usd_cost NUMERIC,
+    PRIMARY KEY(ts, app_id, capability_id, tier)
+);
+
+-- Chargeback fact
+CREATE TABLE IF NOT EXISTS chargeback_fact (
+    month_start DATE,
+    app_id INT REFERENCES applications_dim(app_id),
+    h_code TEXT,
+    sector TEXT,
+    usd_amount NUMERIC,
+    PRIMARY KEY(month_start, app_id)
+);
+
+-- Forecast fact
+CREATE TABLE IF NOT EXISTS forecast_fact (
+    month_start DATE,
+    app_id INT REFERENCES applications_dim(app_id),
+    capability_id INT REFERENCES capabilities_dim(capability_id),
+    tier TEXT,
+    projected_units NUMERIC,
+    projected_cost NUMERIC,
+    method TEXT,
+    PRIMARY KEY(month_start, app_id, capability_id, tier)
+);
+
+-- ETL execution log
+CREATE TABLE IF NOT EXISTS etl_execution_log (
+    run_id SERIAL PRIMARY KEY,
+    job_name TEXT,
+    started_at TIMESTAMP DEFAULT now(),
+    finished_at TIMESTAMP,
+    status TEXT,
+    rows_ingested INT
+);
+
+-- Data lineage
+CREATE TABLE IF NOT EXISTS data_lineage (
+    lineage_id SERIAL PRIMARY KEY,
+    run_id INT REFERENCES etl_execution_log(run_id),
+    source_system TEXT,
+    source_endpoint TEXT,
+    target_table TEXT,
+    target_pk JSONB
+);
+
+-- Mapping overrides
+CREATE TABLE IF NOT EXISTS mapping_overrides (
+    override_id SERIAL PRIMARY KEY,
+    source TEXT,
+    source_key TEXT,
+    h_code_override TEXT,
+    sector_override TEXT
+);
+
+-- Grant permissions
 GRANT CONNECT ON DATABASE appd_licensing TO appd_ro;
-EOF
-
-# --- 4. Initialize DB schema ---
-if [ -f ~/CDW-PepsiCo/postgres/init.sql ]; then
-    echo "⚡ Initializing database schema..."
-    sudo -i -u postgres psql -d appd_licensing -f ~/CDW-PepsiCo/postgres/init.sql
-else
-    echo "⚠️  No init.sql found — skipping database initialization."
-fi
-
-# --- 5. Grant full privileges to ETL user ---
-sudo -i -u postgres psql -d appd_licensing <<EOF
 GRANT USAGE ON SCHEMA public TO appd_ro;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO appd_ro;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO appd_ro;
-EOF
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO appd_ro;
+SQL
 
-# --- 6. Setup Python environment ---
-echo "🐍 Setting up Python environment..."
-python3 -m venv ~/etl_env
-source ~/etl_env/bin/activate
+echo "🐍 Setting up Python virtual environment..."
+python3 -m venv $APP_DIR/etl_env
+source $APP_DIR/etl_env/bin/activate
 pip install --upgrade pip
-if [ -f ~/CDW-PepsiCo/requirements.txt ]; then
-    pip install -r ~/CDW-PepsiCo/requirements.txt
-else
-    echo "⚠️  requirements.txt not found — skipping Python dependency installation."
+pip install requests pandas psycopg2-binary python-dotenv
+
+echo "📦 Installing Grafana..."
+if ! grep -q "packages.grafana.com" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+    sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
+    wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+    sudo apt update
 fi
+sudo apt -y install grafana
 
-# --- 7. Install Grafana ---
-echo "📊 Installing Grafana..."
-sudo apt install -y apt-transport-https software-properties-common
-sudo curl -fsSL https://packages.grafana.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
-sudo apt update
-sudo apt install -y grafana
-
-# --- 8. Enable and start Grafana service ---
+echo "🔹 Enabling and starting Grafana..."
+sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
 sudo systemctl start grafana-server
 
-# --- 9. Install Grafana plugins ---
-echo "🔌 Installing Grafana plugins..."
-sudo grafana-cli plugins install grafana-piechart-panel
-sudo grafana-cli plugins install grafana-worldmap-panel
-sudo grafana-cli plugins install grafana-clock-panel
-sudo systemctl restart grafana-server
+echo "📥 Preparing seed script..."
+if [ -f "$SEED_SRC" ]; then
+    echo "📦 Copying seed file from repo to $SEED_DEST..."
+    sudo mkdir -p "$(dirname "$SEED_DEST")"
+    sudo cp "$SEED_SRC" "$SEED_DEST"
+    sudo chown postgres:postgres "$SEED_DEST"
+else
+    echo "⚠️ No seed file found in repo at $SEED_SRC"
+fi
 
-# --- 10. Completion ---
+echo "🌱 Running seed script..."
+if [ -f "$SEED_DEST" ]; then
+    echo "Found seed file at $SEED_DEST. Seeding database..."
+    sudo -u postgres psql -d appd_licensing -f "$SEED_DEST"
+    echo "✅ Database seeded successfully."
+else
+    echo "⚠️ Seed file not found at $SEED_DEST. Skipping seed step."
+fi
+
+echo "🔍 Running ETL stack health check..."
+POSTGRES_STATUS=$(sudo systemctl is-active postgresql)
+GRAFANA_STATUS=$(sudo systemctl is-active grafana-server)
+PYTHON_VERSION=$(python3 --version)
+
+echo "PostgreSQL service: $POSTGRES_STATUS"
+echo "Grafana service: $GRAFANA_STATUS"
+echo "Python version: $PYTHON_VERSION"
+
 echo "✅ ETL stack setup complete!"
-echo "PostgreSQL DB: appd_licensing"
-echo "Grafana is running on port 3000"
-echo "Activate Python environment: source ~/etl_env/bin/activate"
+echo "To test database connectivity, run:"
+echo "source $APP_DIR/etl_env/bin/activate && python -c 'import psycopg2; psycopg2.connect(dbname=\"appd_licensing\", user=\"appd_ro\", password=\"ChangeMe123!\", host=\"localhost\", port=5432); print(\"✅ Database connection OK\")'"

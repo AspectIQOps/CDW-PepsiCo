@@ -1,24 +1,49 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Stopping and removing Docker containers..."
-docker compose -f ~/etl_project/docker/docker-compose.yml down || true
+echo "⚠️  Starting teardown of AppDynamics Licensing ETL stack..."
+echo "This will stop containers, drop the database, and remove /opt/appd-licensing."
+read -p "Continue? (y/N): " confirm
+if [[ "${confirm,,}" != "y" ]]; then
+  echo "❌ Teardown aborted."
+  exit 0
+fi
 
-echo "Removing Docker images..."
-docker images -a | grep 'etl_project\|grafana\|postgres' | awk '{print $3}' | xargs -r docker rmi -f || true
+#----------------------------------------------------------
+# 1. Stop and remove Docker containers
+#----------------------------------------------------------
+if [ -d "/opt/appd-licensing/CDW-PepsiCo/docker" ]; then
+  echo "🐳 Stopping Docker services..."
+  cd /opt/appd-licensing/CDW-PepsiCo/docker
+  sudo docker compose down -v || true
+else
+  echo "⚠️  Docker directory not found — skipping container cleanup."
+fi
 
-echo "Dropping PostgreSQL database..."
-sudo -i -u postgres psql -c "DROP DATABASE IF EXISTS appd_licensing;" || true
-sudo -i -u postgres psql -c "DROP ROLE IF EXISTS appd_ro;" || true
+#----------------------------------------------------------
+# 2. Drop PostgreSQL database and user
+#----------------------------------------------------------
+echo "🐘 Dropping database and user..."
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS appd_licensing;" || true
+sudo -u postgres psql -c "DROP USER IF EXISTS appd_user;" || true
 
-echo "Removing Python virtual environment..."
-rm -rf ~/etl_env
+#----------------------------------------------------------
+# 3. Remove application directories
+#----------------------------------------------------------
+echo "🗑️  Removing application directories..."
+sudo rm -rf /opt/appd-licensing
 
-echo "Removing cloned repo..."
-rm -rf ~/etl_project
+#----------------------------------------------------------
+# 4. Clean up temporary files
+#----------------------------------------------------------
+echo "🧼 Cleaning up temporary files..."
+sudo rm -f /tmp/seed_all_tables.sql
 
-echo "Cleaning up Docker volumes and networks..."
-docker volume prune -f || true
-docker network prune -f || true
+#----------------------------------------------------------
+# 5. Optional package cleanup (comment out if not desired)
+#----------------------------------------------------------
+# echo "🧹 Removing optional packages (Docker, Postgres, etc.)..."
+# sudo apt-get remove --purge -y docker-compose docker.io postgresql postgresql-contrib python3-pip || true
+# sudo apt-get autoremove -y
 
-echo "Teardown complete."
+echo "✅ Teardown complete. System cleaned."
