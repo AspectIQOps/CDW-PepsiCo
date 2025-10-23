@@ -1,19 +1,24 @@
 #!/bin/bash
 set -e
 
-# --- Determine repo path dynamically ---
+# --- Detect script and repo paths dynamically ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$REPO_DIR/.env"
-BASE_DIR="/opt/appd-licensing"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_PATH="/opt/appd-licensing/.env"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-    echo "❌ .env file not found at $ENV_FILE. Cannot determine DB credentials."
-    exit 1
+# If .env does not exist in /opt, fallback to repo root
+if [[ ! -f "$ENV_PATH" ]]; then
+    if [[ -f "$REPO_ROOT/.env" ]]; then
+        ENV_PATH="$REPO_ROOT/.env"
+        echo "⚠️ .env not found in /opt/appd-licensing, using repo .env"
+    else
+        echo "❌ .env file not found in /opt/appd-licensing or repo. Cannot determine DB credentials."
+        exit 1
+    fi
 fi
 
-# --- Load DB credentials from .env ---
-export $(grep -v '^#' "$ENV_FILE" | xargs)
+# Load .env variables
+export $(grep -v '^#' "$ENV_PATH" | xargs)
 
 echo "🔹 Running ETL stack post-install health check..."
 
@@ -32,8 +37,9 @@ fi
 # -------------------------------
 echo -e "\n📊 Checking required tables and seed data..."
 TABLES=("applications_dim" "capabilities_dim" "license_usage_fact" "license_cost_fact" "chargeback_fact" "forecast_fact" "etl_execution_log" "data_lineage" "mapping_overrides" "time_dim")
+
 for t in "${TABLES[@]}"; do
-    COUNT=$(sudo -u postgres psql -d "${DB_NAME}" -tAc "SELECT COUNT(*) FROM $t;")
+    COUNT=$(sudo -u postgres psql -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM $t;" 2>/dev/null || echo "")
     if [[ "$COUNT" != "" ]]; then
         echo "Table $t exists with $COUNT rows"
     else
@@ -55,13 +61,28 @@ fi
 # 4️⃣ Python virtual environment & DB connectivity
 # -------------------------------
 echo -e "\n🐍 Checking Python environment and DB connectivity..."
-VENV_PATH="$BASE_DIR/etl_env"
+VENV_PATH="/opt/appd-licensing/etl_env"
 if [[ -f "$VENV_PATH/bin/activate" ]]; then
     source "$VENV_PATH/bin/activate"
     echo "✅ Virtual environment found at $VENV_PATH"
 
     echo -n "Testing DB connection... "
-    python -c "import psycopg2; psycopg2.connect(dbname='${DB_NAME}', user='${DB_USER}', password='${DB_PASSWORD}', host='${DB_HOST:-localhost}', port=${DB_PORT:-5432}); print('✅ Connection OK')"
+    python - <<PYTHON_EOF
+import psycopg2
+import os
+
+PG_DSN = "dbname={0} user={1} password={2} host={3} port={4}".format(
+    os.getenv('DB_NAME'), os.getenv('DB_USER'), os.getenv('DB_PASSWORD'),
+    os.getenv('DB_HOST','localhost'), os.getenv('DB_PORT','5432')
+)
+try:
+    conn = psycopg2.connect(PG_DSN)
+    conn.close()
+    print("✅ Connection OK")
+except Exception as e:
+    print(f"❌ Connection failed: {e}")
+PYTHON_EOF
+
 else
     echo "❌ Virtual environment not found at $VENV_PATH"
 fi
