@@ -1,26 +1,70 @@
 #!/bin/bash
+# ETL stack setup script
+# Version: 2025.10.23.4
+# Purpose: Install PostgreSQL, Python environment, Grafana (standard path), create DB/tables, and seed data
+
 set -e
 
-# Determine script directory
+# --- Paths ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="/opt/appd-licensing"
+ENV_FILE="$SCRIPT_DIR/../.env"
+
+# --- 1️⃣ Check for .env file ---
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "❌ .env file not found at $ENV_FILE."
+    echo "Please create it before running setup. Example contents:"
+    cat <<EOF
+DB_NAME=appd_licensing
+DB_USER=appd_ro
+DB_PASSWORD=ChangeMe123!
+DB_PORT=5432
+EOF
+    exit 1
+fi
+
+# --- 2️⃣ Load .env values ---
+export $(grep -v '^#' "$ENV_FILE" | xargs || true)
+POSTGRES_DB="${DB_NAME:-appd_licensing}"
+POSTGRES_USER="${DB_USER:-appd_ro}"
+POSTGRES_PASSWORD="${DB_PASSWORD:-ChangeMe123!}"
+POSTGRES_PORT="${DB_PORT:-5432}"
 
 echo "🔄 Updating system packages..."
 sudo apt update && sudo apt -y upgrade
 
 echo "🐍 Installing Python and required tools..."
-sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common
+sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common gnupg
 
-echo "🗄️ Setting up PostgreSQL database and user..."
-sudo -u postgres psql <<'SQL'
-DROP DATABASE IF EXISTS appd_licensing;
-DROP ROLE IF EXISTS appd_ro;
+# --- 3️⃣ Ensure PostgreSQL cluster exists and service is running ---
+# Always create a fresh cluster
+if pg_lsclusters -h | grep -q "16 main"; then
+    echo "⚡ Removing existing cluster 16/main..."
+    sudo pg_dropcluster --stop 16 main || true
+fi
 
-CREATE ROLE appd_ro LOGIN PASSWORD 'ChangeMe123!';
-CREATE DATABASE appd_licensing OWNER postgres;
+echo "⚡ Creating PostgreSQL cluster 16/main..."
+sudo pg_createcluster 16 main --start
 
-\c appd_licensing
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
 
+# Wait until PostgreSQL is ready
+until sudo -u postgres psql -c '\q' 2>/dev/null; do
+    echo "⏳ Waiting for PostgreSQL to start..."
+    sleep 2
+done
+echo "✅ PostgreSQL is running."
+
+# --- 4️⃣ Set up database and tables ---
+sudo -u postgres psql <<SQL
+DROP DATABASE IF EXISTS $POSTGRES_DB;
+DROP ROLE IF EXISTS $POSTGRES_USER;
+
+CREATE ROLE $POSTGRES_USER LOGIN PASSWORD '$POSTGRES_PASSWORD';
+CREATE DATABASE $POSTGRES_DB OWNER postgres;
+
+\c $POSTGRES_DB
 CREATE SCHEMA IF NOT EXISTS public;
 
 -- Capabilities dimension
@@ -123,13 +167,13 @@ CREATE TABLE IF NOT EXISTS mapping_overrides (
 );
 
 -- Grant permissions
-GRANT CONNECT ON DATABASE appd_licensing TO appd_ro;
-GRANT USAGE ON SCHEMA public TO appd_ro;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO appd_ro;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO appd_ro;
+GRANT CONNECT ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;
+GRANT USAGE ON SCHEMA public TO $POSTGRES_USER;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $POSTGRES_USER;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $POSTGRES_USER;
 SQL
 
-echo "🐍 Setting up Python virtual environment..."
+# --- 5️⃣ Python virtual environment ---
 sudo mkdir -p "$BASE_DIR"
 sudo chown -R "$SUDO_USER":"$SUDO_USER" "$BASE_DIR"
 python3 -m venv "$BASE_DIR/etl_env"
@@ -137,30 +181,30 @@ source "$BASE_DIR/etl_env/bin/activate"
 pip install --upgrade pip
 pip install requests pandas psycopg2-binary python-dotenv
 
-echo "🔧 Installing Grafana..."
-sudo add-apt-repository -y "deb https://packages.grafana.com/oss/deb stable main"
-wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+# --- 6️⃣ Grafana installation (standard path) ---
+echo "🔧 Installing Grafana (standard package path)..."
+sudo apt install -y software-properties-common wget
+wget -q -O - https://packages.grafana.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
 sudo apt update
 sudo apt -y install grafana
 
-echo "🔹 Enable and start Grafana..."
 sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
 sudo systemctl start grafana-server
 
-echo "🌱 Preparing seed script..."
+# --- 7️⃣ Seed database ---
 SEED_SRC="$SCRIPT_DIR/../postgres/seed_all_tables.sql"
 SEED_TMP="/tmp/seed_all_tables.sql"
 if [[ -f "$SEED_SRC" ]]; then
     sudo cp "$SEED_SRC" "$SEED_TMP"
     sudo chown postgres:postgres "$SEED_TMP"
-    echo "🌱 Running seed script..."
-    sudo -u postgres psql -d appd_licensing -f "$SEED_TMP"
+    sudo -u postgres psql -d "$POSTGRES_DB" -f "$SEED_TMP"
     echo "✅ Seed data inserted successfully."
 else
     echo "⚠️ Seed file not found at $SEED_SRC. Skipping seed step."
 fi
 
 echo "✅ ETL stack setup complete!"
-echo "To test database connectivity, run:"
-echo "source $BASE_DIR/etl_env/bin/activate && python -c 'import psycopg2; psycopg2.connect(dbname=\"appd_licensing\", user=\"appd_ro\", password=\"ChangeMe123!\", host=\"localhost\", port=5432); print(\"✅ Database connection OK\")'"
+echo "Test DB connection with:"
+echo "source $BASE_DIR/etl_env/bin/activate && python -c 'import psycopg2; psycopg2.connect(dbname=\"$POSTGRES_DB\", user=\"$POSTGRES_USER\", password=\"$POSTGRES_PASSWORD\", host=\"localhost\", port=$POSTGRES_PORT); print(\"✅ Connection OK\")'"

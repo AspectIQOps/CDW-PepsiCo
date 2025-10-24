@@ -1,37 +1,69 @@
 #!/bin/bash
+# ETL stack teardown script
+# Version: 2025.10.23.4
+# Purpose: Stop/remove Grafana, PostgreSQL clusters, Python environment, and seed files
+
 set -e
 
-# --- Determine repo path dynamically ---
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$REPO_DIR/.env"
 BASE_DIR="/opt/appd-licensing"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-    echo "❌ .env file not found at $ENV_FILE. Cannot determine DB credentials."
-    exit 1
+# --- Grafana ---
+echo "🛑 Stopping Grafana service..."
+if systemctl list-units --full -all | grep -q grafana-server.service; then
+    sudo systemctl stop grafana-server || echo "⚠️ Could not stop Grafana service, skipping."
+    sudo systemctl disable grafana-server || echo "⚠️ Could not disable Grafana service, skipping."
+else
+    echo "⚠️ Grafana service not found, skipping stop/disable."
 fi
 
-# --- Load DB credentials from .env ---
-export $(grep -v '^#' "$ENV_FILE" | xargs)
+echo "🗑️ Removing Grafana package..."
+if dpkg -l | grep -q grafana; then
+    sudo apt remove -y grafana || echo "⚠️ Could not remove Grafana package, skipping."
+    sudo apt purge -y grafana || echo "⚠️ Could not purge Grafana package, skipping."
+    sudo rm -f /etc/apt/sources.list.d/grafana.list
+    sudo rm -f /usr/share/keyrings/grafana-archive-keyring.gpg
+else
+    echo "⚠️ Grafana package not installed, skipping removal."
+fi
 
-POSTGRES_DB="${DB_NAME:-appd_licensing}"
-POSTGRES_USER="${DB_USER:-appd_ro}"
+# --- PostgreSQL ---
+echo "🛑 Stopping PostgreSQL..."
+sudo systemctl stop postgresql || echo "⚠️ PostgreSQL service not running."
 
-echo "🛑 Stopping Grafana..."
-sudo systemctl stop grafana-server || true
-sudo systemctl disable grafana-server || true
+echo "🗄️ Dropping all PostgreSQL databases and roles..."
+# Only attempt if server is running
+if pg_isready >/dev/null 2>&1; then
+    sudo -u postgres psql -Atc "SELECT datname FROM pg_database WHERE datname NOT IN ('template0','template1')" | while read db; do
+        echo "Dropping database $db..."
+        sudo -u postgres dropdb "$db" || echo "⚠️ Could not drop database $db."
+    done
 
-echo "🗄️ Dropping PostgreSQL database and user..."
-sudo -u postgres psql <<SQL
-DROP DATABASE IF EXISTS $POSTGRES_DB;
-DROP ROLE IF EXISTS $POSTGRES_USER;
-SQL
+    sudo -u postgres psql -Atc "SELECT rolname FROM pg_roles WHERE rolname NOT IN ('postgres')" | while read role; do
+        echo "Dropping role $role..."
+        sudo -u postgres dropuser "$role" || echo "⚠️ Could not drop role $role."
+    done
+else
+    echo "⚠️ PostgreSQL server not ready; skipping DB/role drop."
+fi
 
-echo "🐍 Removing Python virtual environment and application directory..."
-sudo rm -rf "$BASE_DIR"
+echo "🗑️ Dropping all PostgreSQL clusters..."
+for cluster in $(pg_lsclusters -h | awk '{print $1, $2}'); do
+    VERSION=$(echo $cluster | awk '{print $1}')
+    NAME=$(echo $cluster | awk '{print $2}')
+    echo "Dropping cluster $VERSION/$NAME..."
+    sudo pg_dropcluster --stop "$VERSION" "$NAME" || echo "⚠️ Could not drop cluster $VERSION/$NAME."
+done
 
+# --- Python virtual environment and app directory ---
+if [[ -d "$BASE_DIR" ]]; then
+    echo "🐍 Removing Python virtual environment and application directory..."
+    sudo rm -rf "$BASE_DIR"
+else
+    echo "⚠️ Base directory $BASE_DIR not found, skipping."
+fi
+
+# --- Clean temporary seed files ---
 echo "🧹 Cleaning up temporary seed files..."
-sudo rm -f /tmp/create_tables.sql /tmp/seed_all_tables.sql
+sudo rm -f /tmp/seed_all_tables.sql
 
-echo "✅ Teardown complete!"
+echo "✅ ETL stack teardown complete!"
