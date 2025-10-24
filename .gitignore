@@ -1,30 +1,65 @@
-# Environment files
+# ------------------------
+# Environment & secrets
+# ------------------------
 .env
-#.env.example
 .env.local
 .env.*.local
+.env.*.bak
 
-# Python caches
+# ------------------------
+# Python
+# ------------------------
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+venv/
+.venv/
+*.egg-info/
+*.egg
 
-# IDE / editor files
+# ------------------------
+# IDE / editor
+# ------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# ------------------------
+# OS
+# ------------------------
 .DS_Store
 Thumbs.db
 
-# Logs
+# ------------------------
+# Logs & runtime files
+# ------------------------
 *.log
-
-# Docker
 *.pid
+*.sqlite
+*.db
 
-#OLD directory
-/OLD
+# ------------------------
+# Docker / containers
+# ------------------------
+docker-compose.override.yml
+docker/*.log
+*.tar
+*.img
+
+# ------------------------
+# Grafana
+# ------------------------
+grafana/data/
+grafana/log/
+grafana/plugins/
+grafana/conf/custom.ini
+grafana/provisioning/dashboards/*_local.yaml
+
+# ------------------------
+# Old / backup folders
+# ------------------------
+OLD/
+backup/
+tmp/

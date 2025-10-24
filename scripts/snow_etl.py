@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 import psycopg2
 from dotenv import load_dotenv
@@ -6,7 +7,7 @@ from dotenv import load_dotenv
 # --- Load .env from /opt/appd-licensing ---
 ENV_PATH = "/opt/appd-licensing/.env"
 if not os.path.isfile(ENV_PATH):
-    raise SystemExit(f"❌ .env file not found at {ENV_PATH}")
+    sys.exit(f"❌ .env file not found at {ENV_PATH}")
 
 load_dotenv(ENV_PATH)
 
@@ -19,6 +20,10 @@ DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 
+# Validate ServiceNow credentials
+if not all([SN, USER, PWD]):
+    sys.exit("❌ Missing ServiceNow credentials in .env (SN_INSTANCE, SN_USER, SN_PASS)")
+
 PG_DSN = f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST} port={DB_PORT}"
 BASE = f"https://{SN}.service-now.com/api/now/table"
 
@@ -26,9 +31,23 @@ def pull(table, fields, query=None):
     params = {'sysparm_fields': ','.join(fields), 'sysparm_limit': 10000}
     if query:
         params['sysparm_query'] = query
-    r = requests.get(BASE + f"/{table}", auth=(USER, PWD), params=params, timeout=60)
-    r.raise_for_status()
-    return r.json()['result']
+    try:
+        r = requests.get(BASE + f"/{table}", auth=(USER, PWD), params=params, timeout=60)
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        sys.exit(f"❌ HTTP error while pulling {table}: {e}")
+    except requests.exceptions.RequestException as e:
+        sys.exit(f"❌ Request failed while pulling {table}: {e}")
+
+    # Detect HTML responses (hibernating instance)
+    content_type = r.headers.get('Content-Type', '')
+    if 'text/html' in content_type:
+        sys.exit(f"❌ Received HTML instead of JSON. Your ServiceNow instance may be hibernating: {r.url}")
+
+    try:
+        return r.json()['result']
+    except ValueError as e:
+        sys.exit(f"❌ Failed to parse JSON from ServiceNow response: {e}")
 
 def upsert_services(conn, services):
     cur = conn.cursor()

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ETL stack setup script
-# Version: 2025.10.23.4
+# Version: 2025.10.23.5
 # Purpose: Install PostgreSQL, Python environment, Grafana (standard path), create DB/tables, and seed data
 
 set -e
@@ -14,7 +14,6 @@ ENV_FILE="$BASE_DIR/.env"   # target copy of .env
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_DEST="/opt/appd-licensing/.env"
 
-# Determine appropriate owner: prefer SUDO_USER if script run with sudo
 ETL_OWNER="${SUDO_USER:-$USER}"
 
 if [[ -f "$REPO_ROOT/.env" ]]; then
@@ -40,12 +39,10 @@ EOF
 fi
 
 # --- 2️⃣ Load .env values safely ---
-# Export all variables in .env
 set -a
 source "$ENV_FILE"
 set +a
 
-# Optional: ensure required vars exist
 : "${DB_NAME:?DB_NAME not set in .env}"
 : "${DB_USER:?DB_USER not set in .env}"
 : "${DB_PASSWORD:?DB_PASSWORD not set in .env}"
@@ -66,10 +63,8 @@ echo "🐍 Installing Python and required tools..."
 sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common gnupg
 
 # --- 4️⃣ Ensure PostgreSQL cluster exists and service is running ---
-# Detect the default installed PostgreSQL version
 PG_VERSION=$(pg_lsclusters -h | awk 'NR==1{print $1}')
 
-# Remove existing 'main' cluster if it exists
 if pg_lsclusters -h | grep -q "$PG_VERSION main"; then
     echo "⚡ Removing existing cluster $PG_VERSION/main..."
     sudo pg_dropcluster --stop "$PG_VERSION" main || true
@@ -81,7 +76,6 @@ sudo pg_createcluster "$PG_VERSION" main --start
 sudo systemctl enable postgresql
 sudo systemctl start postgresql
 
-# Wait until PostgreSQL is ready
 until sudo -u postgres psql -c '\q' 2>/dev/null; do
     echo "⏳ Waiting for PostgreSQL to start..."
     sleep 2
@@ -111,7 +105,7 @@ CREATE TABLE IF NOT EXISTS applications_dim (
     app_id SERIAL PRIMARY KEY,
     appd_application_id INT,
     appd_application_name TEXT,
-    sn_sys_id TEXT,
+    sn_sys_id TEXT UNIQUE,
     sn_service_name TEXT,
     h_code TEXT,
     sector TEXT
@@ -198,11 +192,25 @@ CREATE TABLE IF NOT EXISTS mapping_overrides (
     sector_override TEXT
 );
 
--- Grant permissions
+-- Grant privileges for tables and sequences to ETL user
 GRANT CONNECT ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;
 GRANT USAGE ON SCHEMA public TO $POSTGRES_USER;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $POSTGRES_USER;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $POSTGRES_USER;
+
+DO \$\$
+DECLARE
+    seq RECORD;
+BEGIN
+    FOR seq IN
+        SELECT sequence_name
+        FROM information_schema.sequences
+        WHERE sequence_schema = 'public'
+    LOOP
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE %I TO %I;', seq.sequence_name, '$POSTGRES_USER');
+    END LOOP;
+END
+\$\$;
 SQL
 
 # --- 6️⃣ Python virtual environment ---
@@ -213,7 +221,6 @@ python3 -m venv "$BASE_DIR/etl_env"
 source "$BASE_DIR/etl_env/bin/activate"
 pip install --upgrade pip
 
-# Install Python packages from requirements.txt if it exists
 REPO_REQ="$REPO_ROOT/requirements.txt"
 if [[ -f "$REPO_REQ" ]]; then
     echo "📦 Installing Python packages from $REPO_REQ..."
@@ -224,21 +231,15 @@ else
 fi
 
 # --- 7️⃣ Grafana installation (standard path) ---
-echo "🔧 Installing Grafana (standard package path)..."
+echo "🔧 Installing Grafana..."
 sudo apt install -y software-properties-common wget
-
-# Overwrite GPG key every time to avoid prompts
 wget -q -O - https://packages.grafana.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg
-
 echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list > /dev/null
-
 sudo apt update
 sudo apt -y install grafana
-
 sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
 sudo systemctl start grafana-server
-
 
 # --- 8️⃣ Seed database ---
 SEED_SRC="$SCRIPT_DIR/../postgres/seed_all_tables.sql"
