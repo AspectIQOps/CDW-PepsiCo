@@ -1,0 +1,2 @@
+# Run ETL script hourly
+0 * * * * root /entrypoint.sh >> /var/log/etl.log 2>&1

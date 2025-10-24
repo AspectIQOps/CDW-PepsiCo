@@ -1,29 +1,68 @@
+version: "3.9"
+
 services:
+  # -----------------------
+  # PostgreSQL
+  # -----------------------
   postgres:
-    image: postgres:16
+    image: postgres:18
     container_name: postgres
+    restart: always
     environment:
-      POSTGRES_DB: appd_licensing
-      POSTGRES_USER: appd_ro
-      POSTGRES_PASSWORD: ChangeMe123!
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - ../postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
-    networks:
-      - appd_net
 
+  # -----------------------
+  # Python ETL
+  # -----------------------
   etl:
     build:
-      context: ..
-      dockerfile: docker/dockerfile
-    env_file:
-      - .env
+      context: .
+      dockerfile: docker/etl/Dockerfile
+    container_name: etl
+    restart: on-failure
     depends_on:
       - postgres
-    networks:
-      - appd_net
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      # Add other ETL-specific env vars here
+    volumes:
+      - ./scripts:/app/etl
+      - ./docker/etl/etl-cron:/etc/cron.d/etl-cron
+      - ./docker/etl/entrypoint.sh:/entrypoint.sh
 
-networks:
-  appd_net:
-    driver: bridge
+  # -----------------------
+  # Grafana
+  # -----------------------
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: grafana
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: postgres:5432
+      GF_DATABASE_NAME: ${DB_NAME}
+      GF_DATABASE_USER: ${DB_USER}
+      GF_DATABASE_PASSWORD: ${DB_PASSWORD}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  postgres_data:
+  grafana_data:
