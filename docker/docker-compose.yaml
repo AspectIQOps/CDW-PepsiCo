@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  # -----------------------
+  # PostgreSQL
+  # -----------------------
+  postgres:
+    image: postgres:18.0
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+
+  # -----------------------
+  # Python ETL
+  # -----------------------
+  etl:
+    build:
+      context: .
+      dockerfile: docker/etl/Dockerfile
+    container_name: etl
+    restart: on-failure
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SN_INSTANCE: ${SN_INSTANCE}
+      SN_USER: ${SN_USER}
+      SN_PASS: ${SN_PASS}
+    working_dir: /app/etl
+    entrypoint: ["/entrypoint.sh"]
+    volumes:
+      - ./scripts:/app/etl
+      - ./docker/etl/etl-cron:/etc/cron.d/etl-cron:ro
+      - ./docker/etl/entrypoint.sh:/entrypoint.sh:ro
+      - ./docker/.env:/opt/appd-licensing/.env:ro
+
+  # -----------------------
+  # Grafana
+  # -----------------------
+  grafana:
+    image: grafana/grafana:12.2.1
+    container_name: grafana
+    restart: always
+    depends_on:
+      - postgres
+    environment:
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: postgres:5432
+      GF_DATABASE_NAME: ${DB_NAME}
+      GF_DATABASE_USER: ${DB_USER}
+      GF_DATABASE_PASSWORD: ${DB_PASSWORD}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+# -----------------------
+# Volumes
+# -----------------------
+volumes:
+  postgres_data:
+  grafana_data:
