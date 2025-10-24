@@ -1,2 +1,2 @@
-# Run ETL script hourly
-0 * * * * root /entrypoint.sh >> /var/log/etl.log 2>&1
+# Run ETL every hour
+0 * * * * root /usr/local/bin/python /app/etl/appd_etl.py >> /var/log/etl.log 2>&1

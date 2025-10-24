@@ -1,15 +1,16 @@
 #!/bin/bash
 set -e
 
-# Optional: activate virtual environment if you prefer venv
-# source /app/venv/bin/activate
-
-# Run ETL script
-if [ -f "/app/etl/run_etl.py" ]; then
-    python /app/etl/run_etl.py
-else
-    echo "No ETL script found at /app/etl/run_etl.py"
+# Source environment variables
+if [[ -f /opt/appd-licensing/.env ]]; then
+  export $(grep -v '^#' /opt/appd-licensing/.env | xargs)
 fi
 
-# Start cron in foreground (needed for container to stay alive)
-cron -f
+# Start cron
+service cron start
+
+# Execute the ETL Python script
+python /app/etl/appd_etl.py
+
+# Keep container running
+tail -f /dev/null

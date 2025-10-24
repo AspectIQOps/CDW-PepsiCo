@@ -1,13 +1,9 @@
-# Base image
 FROM python:3.12-slim
 
 # Set working directory
-# Copy ETL scripts into container (optional if using volume)
-# COPY scripts/ /app/etl
-
 WORKDIR /app/etl
 
-# Install cron and required system packages
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     curl \
@@ -15,30 +11,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python requirements and install
+# Copy Python requirements
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy ETL scripts into container
-COPY etl/ /app/etl
-
-# Copy entrypoint script
-COPY docker/etl/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy ETL scripts
+COPY scripts/ /app/etl
 
 # Copy cron schedule file
-COPY docker/etl/etl-cron /etc/cron.d/etl-cron
+COPY docker/etl/etl_cron /etc/cron.d/etl-cron
 RUN chmod 0644 /etc/cron.d/etl-cron \
     && crontab /etc/cron.d/etl-cron
 
-# Set environment variables for DB connection (can also pass via docker-compose)
-ENV POSTGRES_HOST=postgres
-ENV POSTGRES_PORT=5432
-ENV POSTGRES_DB=mydb
-ENV POSTGRES_USER=myuser
-ENV POSTGRES_PASSWORD=mypassword
-ENV PYTHONUNBUFFERED=1
+# Copy entrypoint
+COPY docker/etl/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Run cron in foreground
-CMD ["/entrypoint.sh"]
+# Copy .env for licensing/config usage inside container
+COPY .env /opt/appd-licensing/.env
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
