@@ -1,86 +1,58 @@
 #!/bin/bash
-# setup_docker_env.sh
-# Automated environment setup for CDW-PepsiCo Docker stack
-
 set -e
 
 echo "=============================="
 echo "🚀 CDW-PepsiCo Docker Setup"
 echo "=============================="
 
-# --- Update system ---
+# Update system packages
 echo "📦 Updating system packages..."
-sudo apt update -y && sudo apt upgrade -y
+sudo apt update -y
+sudo apt upgrade -y
 
-# --- Install dependencies ---
-echo "🐳 Installing Docker and Docker Compose..."
-sudo apt install -y docker.io docker-compose-plugin git
+# Install dependencies
+echo "🔧 Installing required packages..."
+sudo apt install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    software-properties-common \
+    gnupg \
+    lsb-release
 
-# Enable Docker
+# Add Docker GPG key and repo
+echo "📥 Adding Docker repository..."
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Install Docker
+echo "🐳 Installing Docker..."
+sudo apt update -y
+sudo apt install -y docker-ce docker-ce-cli containerd.io
+
+# Enable and start Docker service
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# --- Verify installation ---
-echo "✅ Docker version:"
+# Check Docker version
 docker --version
-echo "✅ Docker Compose version:"
-docker compose version
 
-# --- Clone repo if not already present ---
-REPO_DIR="CDW-PepsiCo"
-if [ ! -d "$REPO_DIR" ]; then
-  echo "📁 Cloning CDW-PepsiCo repository..."
-  git clone https://github.com/AspectIQOps/CDW-PepsiCo.git
+# Install Docker Compose v2 (as the docker compose subcommand)
+if ! docker compose version &>/dev/null; then
+    echo "📦 Installing Docker Compose v2..."
+    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+        -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "Docker Compose installed:"
+    docker-compose --version
 else
-  echo "📁 Repository already exists. Skipping clone."
+    echo "✅ Docker Compose plugin already available"
 fi
 
-cd "$REPO_DIR"
-
-# --- Checkout dockerization branch ---
-echo "🌿 Checking out dockerization branch..."
-git fetch origin
-git checkout dockerization || echo "⚠️ Branch already active or checkout failed."
-
-# --- Copy .env.example if .env doesn’t exist ---
-if [ ! -f ".env" ]; then
-  echo "🧩 Creating .env file..."
-  if [ -f ".env.example" ]; then
-    cp .env.example .env
-  else
-    touch .env
-  fi
-else
-  echo "🧩 .env file already exists."
-fi
-
-# --- Display .env info ---
-echo
-echo "📋 Please verify your .env file values before continuing:"
-echo "--------------------------------------------------------"
-echo "DB_USER=postgres"
-echo "DB_PASSWORD=supersecret"
-echo "DB_NAME=cdw"
-echo "SN_INSTANCE=myinstance"
-echo "SN_USER=apiuser"
-echo "SN_PASS=apipassword"
-echo "--------------------------------------------------------"
-echo
-read -p "Press ENTER to continue with Docker build and launch..."
-
-# --- Build and start Docker containers ---
-echo "⚙️ Building Docker images..."
-sudo docker compose build
-
-echo "🚀 Starting Docker stack..."
-sudo docker compose up -d
-
-# --- Show status ---
-echo "✅ Docker containers running:"
-sudo docker compose ps
-
-echo
-echo "🌐 Grafana available at: http://<your-ec2-public-dns>:3000"
-echo "   Username: admin | Password: admin"
-echo
-echo "✅ Setup complete!"
+# Optional: Add current user to docker group to avoid sudo
+sudo usermod -aG docker $USER
+echo "✅ Docker environment setup complete!"
+echo "⚠️ You may need to log out and back in for Docker group changes to take effect."
