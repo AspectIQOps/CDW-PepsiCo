@@ -17,13 +17,42 @@ if [[ ! -f "$ENV_PATH" ]]; then
     fi
 fi
 
+# -------------------------------
+# 0️⃣ Check .env ownership & permissions
+# -------------------------------
+EXPECTED_USER="$(whoami)"
+if [[ -f "$ENV_PATH" ]]; then
+    ACTUAL_USER=$(stat -c '%U' "$ENV_PATH")
+    ACTUAL_PERMS=$(stat -c '%a' "$ENV_PATH")
+    if [[ "$ACTUAL_USER" == "$EXPECTED_USER" && "$ACTUAL_PERMS" == "600" ]]; then
+        echo "✅ .env exists, owned by $EXPECTED_USER, permissions 600"
+    else
+        echo "⚠️ .env exists but ownership or permissions are incorrect:"
+        echo "    Owner: $ACTUAL_USER (expected $EXPECTED_USER)"
+        echo "    Permissions: $ACTUAL_PERMS (expected 600)"
+    fi
+else
+    echo "❌ .env file not found at $ENV_PATH"
+fi
+
 # Load .env variables
 export $(grep -v '^#' "$ENV_PATH" | xargs)
 
 echo "🔹 Running ETL stack post-install health check..."
 
 # -------------------------------
-# 1️⃣ PostgreSQL service check
+# 1️⃣ Kernel update and reboot check
+# -------------------------------
+echo -e "\n🧠 Checking for pending kernel updates..."
+if [[ -f /var/run/reboot-required ]]; then
+    echo "⚠️ A system reboot is required to apply kernel updates."
+    echo "   Please run 'sudo reboot' before continuing if this is a fresh setup."
+else
+    echo "✅ No reboot required."
+fi
+
+# -------------------------------
+# 2️⃣ PostgreSQL service check
 # -------------------------------
 echo -e "\n🗄️ Checking PostgreSQL service..."
 if systemctl is-active --quiet postgresql; then
@@ -33,7 +62,7 @@ else
 fi
 
 # -------------------------------
-# 2️⃣ Check database tables
+# 3️⃣ Check database tables
 # -------------------------------
 echo -e "\n📊 Checking required tables and seed data..."
 TABLES=("applications_dim" "capabilities_dim" "license_usage_fact" "license_cost_fact" "chargeback_fact" "forecast_fact" "etl_execution_log" "data_lineage" "mapping_overrides" "time_dim")
@@ -48,7 +77,7 @@ for t in "${TABLES[@]}"; do
 done
 
 # -------------------------------
-# 3️⃣ Grafana service check
+# 4️⃣ Grafana service check
 # -------------------------------
 echo -e "\n📺 Checking Grafana service..."
 if systemctl is-active --quiet grafana-server; then
@@ -58,7 +87,7 @@ else
 fi
 
 # -------------------------------
-# 4️⃣ Python virtual environment & DB connectivity
+# 5️⃣ Python virtual environment & DB connectivity
 # -------------------------------
 echo -e "\n🐍 Checking Python environment and DB connectivity..."
 VENV_PATH="/opt/appd-licensing/etl_env"
@@ -88,7 +117,7 @@ else
 fi
 
 # -------------------------------
-# 5️⃣ Final message
+# 6️⃣ Final message
 # -------------------------------
 echo -e "\n🎉 ETL stack post-install check complete!"
 echo "Check Grafana UI at http://<EC2_PUBLIC_IP>:3000 (default admin/admin)"

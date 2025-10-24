@@ -8,43 +8,75 @@ set -e
 # --- Paths ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="/opt/appd-licensing"
-ENV_FILE="$SCRIPT_DIR/../.env"
+ENV_FILE="$BASE_DIR/.env"   # target copy of .env
+
+# --- Copy .env file to /opt/appd-licensing and set safe ownership/permissions ---
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_DEST="/opt/appd-licensing/.env"
+
+# Determine appropriate owner: prefer SUDO_USER if script run with sudo
+ETL_OWNER="${SUDO_USER:-$USER}"
+
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    sudo cp "$REPO_ROOT/.env" "$ENV_DEST"
+    sudo chown "$ETL_OWNER":"$ETL_OWNER" "$ENV_DEST"
+    sudo chmod 600 "$ENV_DEST"
+    echo "✅ Copied .env to $ENV_DEST (owned by $ETL_OWNER, permissions 600)"
+else
+    echo "⚠️ .env file not found in repo. Skipping copy to $ENV_DEST"
+fi
 
 # --- 1️⃣ Check for .env file ---
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "❌ .env file not found at $ENV_FILE."
     echo "Please create it before running setup. Example contents:"
     cat <<EOF
-DB_NAME=appd_licensing
-DB_USER=appd_ro
-DB_PASSWORD=ChangeMe123!
+DB_NAME=db_name
+DB_USER=db_username
+DB_PASSWORD=db_password
 DB_PORT=5432
 EOF
     exit 1
 fi
 
-# --- 2️⃣ Load .env values ---
-export $(grep -v '^#' "$ENV_FILE" | xargs || true)
-POSTGRES_DB="${DB_NAME:-appd_licensing}"
-POSTGRES_USER="${DB_USER:-appd_ro}"
-POSTGRES_PASSWORD="${DB_PASSWORD:-ChangeMe123!}"
-POSTGRES_PORT="${DB_PORT:-5432}"
+# --- 2️⃣ Load .env values safely ---
+# Export all variables in .env
+set -a
+source "$ENV_FILE"
+set +a
 
+# Optional: ensure required vars exist
+: "${DB_NAME:?DB_NAME not set in .env}"
+: "${DB_USER:?DB_USER not set in .env}"
+: "${DB_PASSWORD:?DB_PASSWORD not set in .env}"
+: "${DB_PORT:?DB_PORT not set in .env}"
+
+POSTGRES_DB="$DB_NAME"
+POSTGRES_USER="$DB_USER"
+POSTGRES_PASSWORD="$DB_PASSWORD"
+POSTGRES_PORT="$DB_PORT"
+
+echo "✅ Loaded .env variables from $ENV_FILE"
+
+# --- 3️⃣ Update system packages ---
 echo "🔄 Updating system packages..."
 sudo apt update && sudo apt -y upgrade
 
 echo "🐍 Installing Python and required tools..."
 sudo apt -y install python3 python3-venv python3-pip postgresql postgresql-contrib wget curl unzip software-properties-common gnupg
 
-# --- 3️⃣ Ensure PostgreSQL cluster exists and service is running ---
-# Always create a fresh cluster
-if pg_lsclusters -h | grep -q "16 main"; then
-    echo "⚡ Removing existing cluster 16/main..."
-    sudo pg_dropcluster --stop 16 main || true
+# --- 4️⃣ Ensure PostgreSQL cluster exists and service is running ---
+# Detect the default installed PostgreSQL version
+PG_VERSION=$(pg_lsclusters -h | awk 'NR==1{print $1}')
+
+# Remove existing 'main' cluster if it exists
+if pg_lsclusters -h | grep -q "$PG_VERSION main"; then
+    echo "⚡ Removing existing cluster $PG_VERSION/main..."
+    sudo pg_dropcluster --stop "$PG_VERSION" main || true
 fi
 
-echo "⚡ Creating PostgreSQL cluster 16/main..."
-sudo pg_createcluster 16 main --start
+echo "⚡ Creating PostgreSQL cluster $PG_VERSION/main..."
+sudo pg_createcluster "$PG_VERSION" main --start
 
 sudo systemctl enable postgresql
 sudo systemctl start postgresql
@@ -56,7 +88,7 @@ until sudo -u postgres psql -c '\q' 2>/dev/null; do
 done
 echo "✅ PostgreSQL is running."
 
-# --- 4️⃣ Set up database and tables ---
+# --- 5️⃣ Set up database and tables ---
 sudo -u postgres psql <<SQL
 DROP DATABASE IF EXISTS $POSTGRES_DB;
 DROP ROLE IF EXISTS $POSTGRES_USER;
@@ -173,19 +205,33 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $POSTGRES
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $POSTGRES_USER;
 SQL
 
-# --- 5️⃣ Python virtual environment ---
+# --- 6️⃣ Python virtual environment ---
 sudo mkdir -p "$BASE_DIR"
 sudo chown -R "$SUDO_USER":"$SUDO_USER" "$BASE_DIR"
+
 python3 -m venv "$BASE_DIR/etl_env"
 source "$BASE_DIR/etl_env/bin/activate"
 pip install --upgrade pip
-pip install requests pandas psycopg2-binary python-dotenv
 
-# --- 6️⃣ Grafana installation (standard path) ---
+# Install Python packages from requirements.txt if it exists
+REPO_REQ="$REPO_ROOT/requirements.txt"
+if [[ -f "$REPO_REQ" ]]; then
+    echo "📦 Installing Python packages from $REPO_REQ..."
+    pip install -r "$REPO_REQ"
+else
+    echo "📦 requirements.txt not found, installing default packages..."
+    pip install requests pandas psycopg2-binary python-dotenv
+fi
+
+# --- 7️⃣ Grafana installation (standard path) ---
 echo "🔧 Installing Grafana (standard package path)..."
 sudo apt install -y software-properties-common wget
+
+# Overwrite GPG key every time to avoid prompts
 wget -q -O - https://packages.grafana.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/grafana-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+
+echo "deb [signed-by=/usr/share/keyrings/grafana-archive-keyring.gpg] https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list > /dev/null
+
 sudo apt update
 sudo apt -y install grafana
 
@@ -193,14 +239,31 @@ sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
 sudo systemctl start grafana-server
 
-# --- 7️⃣ Seed database ---
+
+# --- 8️⃣ Seed database ---
 SEED_SRC="$SCRIPT_DIR/../postgres/seed_all_tables.sql"
 SEED_TMP="/tmp/seed_all_tables.sql"
+
+echo "🧹 Preparing database for seed..."
+if sudo -u postgres psql -d "$POSTGRES_DB" -c '\q' 2>/dev/null; then
+    echo "✅ Database connection OK"
+else
+    echo "❌ Database connection failed, aborting seed."
+    exit 1
+fi
+
 if [[ -f "$SEED_SRC" ]]; then
     sudo cp "$SEED_SRC" "$SEED_TMP"
     sudo chown postgres:postgres "$SEED_TMP"
-    sudo -u postgres psql -d "$POSTGRES_DB" -f "$SEED_TMP"
-    echo "✅ Seed data inserted successfully."
+
+    echo "🚀 Running seed script..."
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$POSTGRES_DB" -f "$SEED_TMP"
+    if [[ $? -eq 0 ]]; then
+        echo "✅ Seed data inserted successfully."
+    else
+        echo "❌ Seed script failed. Check /var/log/postgresql/postgresql-*.log"
+        exit 1
+    fi
 else
     echo "⚠️ Seed file not found at $SEED_SRC. Skipping seed step."
 fi
