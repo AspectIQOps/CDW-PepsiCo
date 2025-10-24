@@ -1,12 +1,9 @@
-version: "3.9"
-
 services:
+
   postgres:
     image: postgres:18
     container_name: postgres
     restart: always
-    env_file:
-      - ../.env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -15,13 +12,12 @@ services:
       - "5432:5432"
     volumes:
       - ../postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ../postgres/seed_all_tables.sql:/docker-entrypoint-initdb.d/seed_all_tables.sql:ro
 
   grafana:
     image: grafana/grafana:12.2.1
     container_name: grafana
     restart: always
-    env_file:
-      - ../.env
     ports:
       - "3000:3000"
     volumes:
@@ -29,14 +25,12 @@ services:
 
   etl:
     build:
-      context: ../   # repo root
+      context: ../       # repo root
       dockerfile: docker/etl/Dockerfile
     container_name: etl
     restart: on-failure
     depends_on:
       - postgres
-    env_file:
-      - ../.env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}

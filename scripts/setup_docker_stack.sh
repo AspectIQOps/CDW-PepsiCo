@@ -1,25 +1,29 @@
 #!/bin/bash
-set -e
+# 🚀 CDW-PepsiCo Docker Stack Setup
+# Builds and starts Docker stack, sets file permissions
+
+# Determine repo root dynamically
+REPO_ROOT=$(dirname "$(realpath "$0")")/..
 
 echo "=============================="
 echo "🚀 CDW-PepsiCo Docker Stack Setup"
 echo "=============================="
 
-# Ensure scripts and entrypoints are executable
-echo "🔧 Setting executable permissions for scripts..."
-chmod +x scripts/*.py
-chmod +x docker/etl/entrypoint.sh
+# Ensure entrypoint and cron scripts are executable
+echo "🔧 Setting executable permissions for ETL scripts..."
+chmod +x "$REPO_ROOT/scripts/"*
+chmod +x "$REPO_ROOT/docker/etl/entrypoint.sh"
+chmod 0644 "$REPO_ROOT/docker/etl/etl_cron"
 
-# Check .env exists
-if [ ! -f .env ]; then
-    echo "❌ .env file not found in repo root! Please create it before continuing."
-    exit 1
-fi
+# Optional: run post-install checks
+"$REPO_ROOT/scripts/post_install_check.sh"
 
-# Run post-install check
-./scripts/post_install_check.sh
+echo "Press Enter to continue with Docker stack setup, or Ctrl+C to cancel..."
+read
 
-read -p "Press Enter to continue with Docker stack setup, or Ctrl+C to cancel..."
-
+# Run docker-compose
 echo "🐳 Starting Docker stack..."
-docker compose -f docker/docker-compose.yaml up --build -d
+docker compose -f "$REPO_ROOT/docker/docker-compose.yaml" --env-file "$REPO_ROOT/.env" up -d --build
+
+echo "✅ Docker stack startup complete!"
+echo "Use 'docker ps' to check running containers."

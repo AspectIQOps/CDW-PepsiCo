@@ -30,7 +30,7 @@ RUN chmod 0644 /etc/cron.d/etl-cron \
 COPY docker/etl/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Copy .env for licensing/config usage inside container
+# Copy .env for internal ETL use
 COPY .env /opt/appd-licensing/.env
 
 # Set entrypoint
