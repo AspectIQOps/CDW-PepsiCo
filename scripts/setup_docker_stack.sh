@@ -5,30 +5,30 @@ echo "=============================="
 echo "🚀 CDW-PepsiCo Docker Stack Setup"
 echo "=============================="
 
-# --- 1️⃣ Check for .env ---
-if [ ! -f .env ]; then
-    echo "❌ .env file not found! Please create it before continuing."
+# --- 1️⃣ Check for .env in repo root ---
+if [ ! -f ../.env ]; then
+    echo "❌ .env file not found in repo root! Please create it before continuing."
     exit 1
 fi
 
 # --- 2️⃣ Make scripts executable ---
-chmod +x scripts/*.sh
+chmod +x ../scripts/*.sh
 
 # --- 3️⃣ Run post-install checks (with reboot prompt) ---
 echo "🔍 Running post-install diagnostics..."
-sudo ./scripts/post_install_check.sh
+sudo ../scripts/post_install_check.sh
 
 # --- 4️⃣ Confirm user wants to continue after potential reboot ---
 read -p "Press Enter to continue with Docker stack setup, or Ctrl+C to cancel..."
 
-# --- 5️⃣ Start Docker stack ---
+# --- 5️⃣ Start Docker stack with .env from repo root ---
 echo "🐳 Starting Docker stack..."
-docker compose -f docker/docker-compose.yaml up -d
+docker compose --env-file ../.env -f docker/docker-compose.yaml up -d
 
 echo "✅ Docker stack started successfully!"
 
 # --- 6️⃣ Show running containers ---
-docker compose ps
+docker compose --env-file ../.env -f docker/docker-compose.yaml ps
 
 # --- 7️⃣ Final reminder if kernel still mismatched ---
 EXPECTED_KERNEL="6.14.0-1015-aws"

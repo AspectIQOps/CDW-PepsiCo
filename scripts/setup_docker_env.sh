@@ -2,7 +2,7 @@
 set -e
 
 echo "=============================="
-echo "🚀 CDW-PepsiCo Docker Setup"
+echo "🚀 CDW-PepsiCo Docker Environment Setup"
 echo "=============================="
 
 # Update system packages
