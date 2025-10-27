@@ -6,10 +6,10 @@ import time
 import random
 
 # --- Configuration ---
-DB_HOST = os.environ.get('POSTGRES_HOST', 'localhost')
-DB_NAME = os.environ.get('POSTGRES_DB', 'aspectiq_db')
-DB_USER = os.environ.get('POSTGRES_USER', 'devuser')
-DB_PASSWORD = os.environ.get('POSTGRES_PASSWORD', 'devpassword')
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+DB_NAME = os.environ.get('DB_NAME', 'appd_licensing')
+DB_USER = os.environ.get('DB_USER', 'appd_ro')
+DB_PASSWORD = os.environ.get('DB_PASSWORD', 'appd_pass')
 
 # Mock data simulating a ServiceNow CMDB API response
 MOCK_SNOW_DATA = [
