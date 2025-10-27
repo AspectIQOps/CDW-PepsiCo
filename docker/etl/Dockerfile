@@ -28,8 +28,8 @@ COPY docker/etl/entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
 # Environment setup
-ENV PYTHONPATH /app/scripts
-ENV ETL_USER devuser
+ENV PYTHONPATH=/app/scripts
+ENV ETL_USER=devuser
 
 # Default command to run the AppD ETL, the snow ETL will override this
 CMD ["./entrypoint.sh", "python", "scripts/etl/appd_etl.py"]

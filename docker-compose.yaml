@@ -7,15 +7,14 @@ services:
     container_name: pepsico-postgres
     restart: unless-stopped
     environment:
-      # These credentials are used by the PostgreSQL server itself.
-      # The ETL scripts use the same values for local testing (from .env)
       - POSTGRES_USER=appd_ro
       - POSTGRES_PASSWORD=appd_pass
       - POSTGRES_DB=appd_licensing
       - TZ=America/New_York
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Volume to inject SQL schema setup scripts
+      # SQL scripts run in alphabetical order
+      # 01_ will seed dimensions first, then 02_ creates tables, then 03_ seeds sample data
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
@@ -41,8 +40,8 @@ services:
       - TZ=America/New_York
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
     networks:
@@ -65,12 +64,17 @@ services:
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-appd
     restart: "no"
-    command: ["/bin/bash", "/app/docker/etl/entrypoint.sh", "python", "scripts/etl/appd_etl.py"]
-    # CRITICAL FIX: Explicitly load variables from .env to bypass automatic loading issues.
+    command: ["/app/entrypoint.sh", "python", "scripts/etl/appd_etl.py"]
     env_file: .env
+    environment:
+      # Override DB_HOST for container networking
+      - DB_HOST=postgres
+      # Provide SSM_PATH for production secret fetching
+      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
+      - etl_logs:/var/log/etl
     networks:
       - pepsico-network
     depends_on:
@@ -83,12 +87,17 @@ services:
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-snow
     restart: "no"
-    command: ["/bin/bash", "/app/docker/etl/entrypoint.sh", "python", "scripts/etl/snow_etl.py"]
-    # CRITICAL FIX: Explicitly load variables from .env to bypass automatic loading issues.
+    command: ["/app/entrypoint.sh", "python", "scripts/etl/snow_etl.py"]
     env_file: .env
+    environment:
+      # Override DB_HOST for container networking
+      - DB_HOST=postgres
+      # Provide SSM_PATH for production secret fetching
+      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
+      - etl_logs:/var/log/etl
     networks:
       - pepsico-network
     depends_on:
@@ -100,6 +109,8 @@ volumes:
     name: pepsico_postgres_data
   grafana_data:
     name: pepsico_grafana_data
+  etl_logs:
+    name: pepsico_etl_logs
 
 networks:
   pepsico-network:

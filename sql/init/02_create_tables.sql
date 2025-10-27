@@ -1,24 +1,25 @@
 -- 02_create_tables.sql
 -- Creates all Fact, Dimension, Configuration, and Audit tables required by SoW (Section 2.5.3)
+-- FIXED: Made FK constraints optional with default values to allow ETL to populate gradually
 
 -- Drop tables if they exist (Reverse order of creation due to FK dependencies)
-DROP TABLE IF EXISTS chargeback_fact;
-DROP TABLE IF EXISTS forecast_fact;
-DROP TABLE IF EXISTS license_cost_fact;
-DROP TABLE IF EXISTS license_usage_fact;
-DROP TABLE IF EXISTS data_lineage;
-DROP TABLE IF EXISTS reconciliation_log;
-DROP TABLE IF EXISTS user_actions;
-DROP TABLE IF EXISTS mapping_overrides;
-DROP TABLE IF EXISTS allocation_rules;
-DROP TABLE IF EXISTS price_config;
-DROP TABLE IF EXISTS applications_dim;
-DROP TABLE IF EXISTS time_dim;
-DROP TABLE IF EXISTS capabilities_dim;
-DROP TABLE IF EXISTS architecture_dim;
-DROP TABLE IF EXISTS sectors_dim;
-DROP TABLE IF EXISTS owners_dim;
-DROP TABLE IF EXISTS etl_execution_log;
+DROP TABLE IF EXISTS chargeback_fact CASCADE;
+DROP TABLE IF EXISTS forecast_fact CASCADE;
+DROP TABLE IF EXISTS license_cost_fact CASCADE;
+DROP TABLE IF EXISTS license_usage_fact CASCADE;
+DROP TABLE IF EXISTS data_lineage CASCADE;
+DROP TABLE IF EXISTS reconciliation_log CASCADE;
+DROP TABLE IF EXISTS user_actions CASCADE;
+DROP TABLE IF EXISTS mapping_overrides CASCADE;
+DROP TABLE IF EXISTS allocation_rules CASCADE;
+DROP TABLE IF EXISTS price_config CASCADE;
+DROP TABLE IF EXISTS applications_dim CASCADE;
+DROP TABLE IF EXISTS time_dim CASCADE;
+DROP TABLE IF EXISTS capabilities_dim CASCADE;
+DROP TABLE IF EXISTS architecture_dim CASCADE;
+DROP TABLE IF EXISTS sectors_dim CASCADE;
+DROP TABLE IF EXISTS owners_dim CASCADE;
+DROP TABLE IF EXISTS etl_execution_log CASCADE;
 
 
 -- ----------------------------------------------------
@@ -28,28 +29,28 @@ DROP TABLE IF EXISTS etl_execution_log;
 -- Owners dimension (Ownership Hierarchy)
 CREATE TABLE owners_dim (
     owner_id SERIAL PRIMARY KEY,
-    owner_name TEXT NOT NULL, -- Primary owner/manager name
-    organizational_hierarchy TEXT, -- e.g., 'PepsiCo/Global IT/Infrastructure'
+    owner_name TEXT NOT NULL,
+    organizational_hierarchy TEXT,
     email TEXT
 );
 
 -- Sectors dimension (Business Sectors)
 CREATE TABLE sectors_dim (
     sector_id SERIAL PRIMARY KEY,
-    sector_name TEXT UNIQUE NOT NULL -- e.g., 'Beverages North America', 'Frito Lay'
+    sector_name TEXT UNIQUE NOT NULL
 );
 
 -- Architecture dimension (Monolith/Microservices)
 CREATE TABLE architecture_dim (
     architecture_id SERIAL PRIMARY KEY,
-    pattern_name TEXT UNIQUE NOT NULL, -- e.g., 'Monolith', 'Microservices'
+    pattern_name TEXT UNIQUE NOT NULL,
     description TEXT
 );
 
 -- Capabilities dimension (License Types: APM, RUM, Synthetic, DB)
 CREATE TABLE capabilities_dim (
     capability_id SERIAL PRIMARY KEY,
-    capability_code TEXT UNIQUE NOT NULL, -- e.g., 'APM', 'RUM', 'SYNTHETIC'
+    capability_code TEXT UNIQUE NOT NULL,
     description TEXT
 );
 
@@ -62,25 +63,28 @@ CREATE TABLE time_dim (
     yyyy_mm TEXT NOT NULL
 );
 
-
--- Applications dimension (CMDB & AppD linkage) - REFERENCES are now valid
+-- Applications dimension (CMDB & AppD linkage)
+-- FIXED: Made FK constraints optional with defaults to allow incremental population
 CREATE TABLE applications_dim (
     app_id SERIAL PRIMARY KEY,
     appd_application_id INT UNIQUE,
-    appd_application_name TEXT NOT NULL,
-    sn_sys_id TEXT UNIQUE NOT NULL, -- ServiceNow Service CMDB ID (cmdb_ci_service)
+    appd_application_name TEXT,
+    sn_sys_id TEXT UNIQUE,
     sn_service_name TEXT,
-    owner_id INT NOT NULL REFERENCES owners_dim(owner_id), -- FK to owners_dim
-    sector_id INT NOT NULL REFERENCES sectors_dim(sector_id), -- FK to sectors_dim
-    architecture_id INT NOT NULL REFERENCES architecture_dim(architecture_id), -- FK to architecture_dim
-    h_code TEXT, -- Cost Center (PepsiCo responsibility to populate)
-    -- Additional metadata from AppD/SNOW
+    owner_id INT DEFAULT 1 REFERENCES owners_dim(owner_id), -- Default to 'Unassigned'
+    sector_id INT DEFAULT 1 REFERENCES sectors_dim(sector_id), -- Default to 'Unassigned'
+    architecture_id INT DEFAULT 1 REFERENCES architecture_dim(architecture_id), -- Default to 'Unknown'
+    h_code TEXT,
     is_critical BOOLEAN DEFAULT FALSE,
     support_group TEXT,
-    -- Audit fields
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP DEFAULT now()
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Create indexes for common query patterns
+CREATE INDEX idx_applications_appd_id ON applications_dim(appd_application_id);
+CREATE INDEX idx_applications_sn_sys_id ON applications_dim(sn_sys_id);
+CREATE INDEX idx_applications_h_code ON applications_dim(h_code);
 
 
 -- ----------------------------------------------------
@@ -91,10 +95,10 @@ CREATE TABLE applications_dim (
 CREATE TABLE price_config (
     price_id SERIAL PRIMARY KEY,
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
-    tier TEXT NOT NULL, -- 'Peak' or 'Pro'
+    tier TEXT NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE,
-    unit_rate NUMERIC NOT NULL, -- Cost per unit (e.g., USD per APM Unit)
+    unit_rate NUMERIC NOT NULL,
     contract_renewal_date DATE
 );
 
@@ -102,7 +106,7 @@ CREATE TABLE price_config (
 CREATE TABLE allocation_rules (
     rule_id SERIAL PRIMARY KEY,
     rule_name TEXT NOT NULL,
-    distribution_method TEXT NOT NULL, -- e.g., 'Equal Split', 'Usage Weight'
+    distribution_method TEXT NOT NULL,
     shared_service_code TEXT,
     applies_to_sector_id INT REFERENCES sectors_dim(sector_id),
     is_active BOOLEAN DEFAULT TRUE
@@ -111,13 +115,13 @@ CREATE TABLE allocation_rules (
 -- Mapping overrides (Manual reconciliation UI for exceptions)
 CREATE TABLE mapping_overrides (
     override_id SERIAL PRIMARY KEY,
-    source_system TEXT NOT NULL, -- 'AppDynamics' or 'ServiceNow'
-    source_key TEXT NOT NULL, -- The unmatched key (e.g., AppD Application Name)
-    target_table TEXT NOT NULL, -- The table being updated (e.g., 'applications_dim')
-    target_field TEXT NOT NULL, -- The field being overridden (e.g., 'h_code')
+    source_system TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    target_table TEXT NOT NULL,
+    target_field TEXT NOT NULL,
     override_value TEXT NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT now(),
+    created_at TIMESTAMP DEFAULT NOW(),
     updated_by TEXT
 );
 
@@ -130,7 +134,7 @@ CREATE TABLE license_usage_fact (
     ts TIMESTAMP NOT NULL REFERENCES time_dim(ts),
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
-    tier TEXT NOT NULL, -- 'Peak' or 'Pro'
+    tier TEXT NOT NULL,
     units_consumed NUMERIC NOT NULL,
     nodes_count INT,
     servers_count INT,
@@ -158,7 +162,7 @@ CREATE TABLE forecast_fact (
     projected_cost NUMERIC,
     confidence_interval_high NUMERIC,
     confidence_interval_low NUMERIC,
-    method TEXT, -- e.g., 'Linear', 'Exponential', 'Seasonal'
+    method TEXT,
     PRIMARY KEY(month_start, app_id, capability_id, tier)
 );
 
@@ -166,11 +170,11 @@ CREATE TABLE forecast_fact (
 CREATE TABLE chargeback_fact (
     month_start DATE NOT NULL,
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
-    h_code TEXT, -- The final resolved H-code for charging
+    h_code TEXT,
     sector_id INT NOT NULL REFERENCES sectors_dim(sector_id),
     owner_id INT NOT NULL REFERENCES owners_dim(owner_id),
     usd_amount NUMERIC NOT NULL,
-    chargeback_cycle TEXT, -- e.g., 'Monthly'
+    chargeback_cycle TEXT,
     is_finalized BOOLEAN DEFAULT FALSE,
     PRIMARY KEY(month_start, app_id)
 );
@@ -182,10 +186,10 @@ CREATE TABLE chargeback_fact (
 -- ETL execution log (Job history)
 CREATE TABLE etl_execution_log (
     run_id SERIAL PRIMARY KEY,
-    job_name TEXT NOT NULL, -- e.g., 'appd_full_load', 'snow_incremental'
-    started_at TIMESTAMP DEFAULT now(),
+    job_name TEXT NOT NULL,
+    started_at TIMESTAMP DEFAULT NOW(),
     finished_at TIMESTAMP,
-    status TEXT, -- 'SUCCESS', 'FAILURE', 'RUNNING'
+    status TEXT,
     rows_ingested INT,
     error_message TEXT
 );
@@ -197,21 +201,21 @@ CREATE TABLE data_lineage (
     source_system TEXT,
     source_endpoint TEXT,
     target_table TEXT NOT NULL,
-    target_pk JSONB, -- JSON representation of the primary key
-    changed_fields JSONB, -- JSON representation of fields that were updated
-    action TEXT -- 'INSERT', 'UPDATE', 'DELETE'
+    target_pk JSONB,
+    changed_fields JSONB,
+    action TEXT
 );
 
 -- Reconciliation log (Matching history)
 CREATE TABLE reconciliation_log (
     reconciliation_id SERIAL PRIMARY KEY,
-    match_run_ts TIMESTAMP DEFAULT now(),
-    source_a TEXT, -- 'AppDynamics'
-    source_b TEXT, -- 'ServiceNow'
-    match_key_a TEXT, -- AppD name
-    match_key_b TEXT, -- SNOW name
+    match_run_ts TIMESTAMP DEFAULT NOW(),
+    source_a TEXT,
+    source_b TEXT,
+    match_key_a TEXT,
+    match_key_b TEXT,
     confidence_score NUMERIC,
-    match_status TEXT, -- 'MATCHED', 'FUZZY_MATCH', 'MANUAL_OVERRIDE', 'UNMATCHED'
+    match_status TEXT,
     resolved_app_id INT REFERENCES applications_dim(app_id)
 );
 
@@ -219,37 +223,47 @@ CREATE TABLE reconciliation_log (
 CREATE TABLE user_actions (
     action_id SERIAL PRIMARY KEY,
     user_name TEXT NOT NULL,
-    action_type TEXT NOT NULL, -- e.g., 'PRICE_UPDATE', 'MAPPING_OVERRIDE'
+    action_type TEXT NOT NULL,
     target_table TEXT,
     details JSONB,
-    action_ts TIMESTAMP DEFAULT now()
+    action_ts TIMESTAMP DEFAULT NOW()
 );
 
 -- ----------------------------------------------------
 -- 5. ACCESS CONTROL
--- We assume the ETL user (devuser) will handle all application data.
+-- Grant privileges to devuser (ETL user)
 -- ----------------------------------------------------
-
--- Grant full access to the ETL user (devuser) on all new tables and sequences
 DO $$
 DECLARE
     t RECORD;
 BEGIN
+    -- Grant table permissions
     FOR t IN
         SELECT table_name
         FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_type IN ('BASE TABLE', 'VIEW')
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
     LOOP
-        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO devuser;', t.table_name);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO appd_ro;', t.table_name);
     END LOOP;
 
-    -- Grant access to sequences for SERIAL primary keys
+    -- Grant sequence permissions
     FOR t IN
         SELECT sequence_name
         FROM information_schema.sequences
         WHERE sequence_schema = 'public'
     LOOP
-        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE %I TO devuser;', t.sequence_name);
+        EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE %I TO appd_ro;', t.sequence_name);
     END LOOP;
 END
 $$;
+
+-- Verification
+DO $$
+BEGIN
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE 'Database Schema Created Successfully';
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE 'Tables created: %', (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public');
+    RAISE NOTICE 'Next: Run seed scripts to populate dimension tables';
+    RAISE NOTICE '==============================================';
+END $$;
