@@ -1,4 +1,9 @@
 #!/bin/bash
+# ==========================================================
+# 🚀 CDW-PepsiCo Docker Stack Deployment
+# Builds and starts the complete PepsiCo AppDynamics stack
+# ==========================================================
+
 set -e
 
 # Colors for output
@@ -14,11 +19,17 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=============================================="
 echo -e "${BLUE}🚀 PepsiCo AppDynamics Licensing Dashboard${NC}"
-echo "   Docker Stack Setup"
+echo "   Docker Stack Deployment"
 echo "=============================================="
 echo ""
 echo "Repository root: $REPO_ROOT"
 echo ""
+
+# Check if running as root (shouldn't be)
+if [ "$EUID" -eq 0 ]; then 
+    echo -e "${YELLOW}⚠️  WARNING: Running as root. Consider using a regular user in the docker group.${NC}"
+    echo ""
+fi
 
 # Check if .env file exists
 if [ ! -f "$REPO_ROOT/.env" ]; then
@@ -26,40 +37,57 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
     echo ""
     echo "Please create a .env file in the repository root."
     echo ""
-    echo "For LOCAL DEVELOPMENT (no AWS SSM):"
-    echo "  cp .env.example .env"
-    echo "  # Edit .env and set DB_PASSWORD and other credentials"
+    echo "📝 For LOCAL DEVELOPMENT:"
+    echo "   cp .env.example .env"
+    echo "   # Edit .env and fill in all DB_* and SN_* credentials"
     echo ""
-    echo "For PRODUCTION (with AWS SSM):"
-    echo "  # Leave DB_PASSWORD empty in .env"
-    echo "  # Ensure AWS credentials and SSM_PATH are configured"
+    echo "☁️  For AWS PRODUCTION (using SSM):"
+    echo "   # Leave DB_PASSWORD empty in .env"
+    echo "   # Ensure AWS credentials are configured"
+    echo "   # Ensure EC2 instance has IAM role with SSM read permissions"
     echo ""
     exit 1
 fi
 
-# Load .env
+# Load .env to check mode
 set -a
 source "$REPO_ROOT/.env"
 set +a
 
-# Check if running locally or in AWS
+# Determine deployment mode
 if [ -n "$DB_PASSWORD" ]; then
-    echo -e "${GREEN}✅ Local development mode detected (DB_PASSWORD set in .env)${NC}"
+    echo -e "${GREEN}✅ Local development mode detected${NC}"
+    echo "   (DB_PASSWORD is set in .env)"
     LOCAL_MODE=true
 else
-    echo -e "${BLUE}☁️  Production mode detected (will use AWS SSM)${NC}"
+    echo -e "${BLUE}☁️  AWS Production mode detected${NC}"
+    echo "   (DB_PASSWORD is empty - will use SSM)"
+    echo "   SSM Path: ${SSM_PATH:-/aspectiq/demo}"
     LOCAL_MODE=false
+    
+    # Verify AWS CLI is available in production mode
+    if ! command -v aws &> /dev/null; then
+        echo -e "${RED}❌ ERROR: AWS CLI not found but required for production mode${NC}"
+        echo "   Install: pip install awscli"
+        exit 1
+    fi
+    
+    # Test SSM access
+    echo "   Testing SSM access..."
+    if aws ssm get-parameter --name "${SSM_PATH:-/aspectiq/demo}/DB_NAME" --query "Parameter.Value" --output text &>/dev/null; then
+        echo -e "${GREEN}   ✅ SSM access verified${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  WARNING: Cannot access SSM parameters${NC}"
+        echo "   Ensure EC2 instance has proper IAM role"
+    fi
 fi
+echo ""
 
 # Validate required vars for local mode
 if [ "$LOCAL_MODE" = true ]; then
-    REQUIRED_VARS=(
-        "DB_USER"
-        "DB_PASSWORD"
-        "DB_NAME"
-    )
-    
+    REQUIRED_VARS=("DB_USER" "DB_PASSWORD" "DB_NAME")
     MISSING_VARS=()
+    
     for var in "${REQUIRED_VARS[@]}"; do
         if [ -z "${!var}" ]; then
             MISSING_VARS+=("$var")
@@ -67,29 +95,38 @@ if [ "$LOCAL_MODE" = true ]; then
     done
     
     if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-        echo -e "${RED}❌ ERROR: Missing required local environment variables:${NC}"
+        echo -e "${RED}❌ ERROR: Missing required environment variables:${NC}"
         for var in "${MISSING_VARS[@]}"; do
             echo "  - $var"
         done
+        echo ""
+        echo "Please update your .env file."
         exit 1
     fi
 fi
 
-echo ""
-
 # Check Docker
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}❌ ERROR: Docker is not installed${NC}"
-    echo "Run: ./scripts/setup/setup_docker_env.sh"
+    echo ""
+    echo "Run the environment setup script first:"
+    echo "  sudo ./scripts/setup/setup_docker_env.sh"
+    echo ""
     exit 1
 fi
 
 if ! docker compose version &> /dev/null; then
-    echo -e "${RED}❌ ERROR: Docker Compose is not available${NC}"
+    echo -e "${RED}❌ ERROR: Docker Compose plugin is not available${NC}"
+    echo ""
+    echo "Run the environment setup script first:"
+    echo "  sudo ./scripts/setup/setup_docker_env.sh"
+    echo ""
     exit 1
 fi
 
 echo -e "${GREEN}✅ Docker environment ready${NC}"
+docker --version
+docker compose version
 echo ""
 
 # Set permissions
@@ -102,10 +139,19 @@ chmod +x "$REPO_ROOT"/scripts/setup/*.sh 2>/dev/null || true
 echo -e "${GREEN}✅ Permissions set${NC}"
 echo ""
 
-# Stop existing containers
-echo "🧹 Stopping any existing containers..."
-cd "$REPO_ROOT"
-docker compose down 2>/dev/null || true
+# Clean slate option
+read -p "🧹 Do you want to remove existing containers and volumes? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "🧹 Stopping and removing existing containers..."
+    cd "$REPO_ROOT"
+    docker compose down -v 2>/dev/null || true
+    echo -e "${GREEN}✅ Cleanup complete${NC}"
+else
+    echo "⏭️  Skipping cleanup (will attempt to restart existing containers)"
+    cd "$REPO_ROOT"
+    docker compose down 2>/dev/null || true
+fi
 echo ""
 
 # Build and start infrastructure
@@ -113,47 +159,76 @@ echo "🐳 Building and starting infrastructure services..."
 echo "   (PostgreSQL and Grafana)"
 echo ""
 
+cd "$REPO_ROOT"
 docker compose up -d --build postgres grafana
 
 echo ""
 echo "⏳ Waiting for PostgreSQL to initialize..."
-sleep 10
 
-# Check PostgreSQL health
-echo "🔍 Checking PostgreSQL health..."
-for i in {1..30}; do
+# Wait for postgres to be healthy
+MAX_WAIT=60
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
     if docker compose exec -T postgres pg_isready -U appd_ro -d appd_licensing > /dev/null 2>&1; then
         echo -e "${GREEN}✅ PostgreSQL is ready${NC}"
         break
     fi
-    if [ $i -eq 30 ]; then
-        echo -e "${RED}❌ PostgreSQL failed to become ready${NC}"
-        echo "Check logs: docker compose logs postgres"
+    
+    if [ $ELAPSED -eq 0 ]; then
+        echo -n "   Waiting"
+    fi
+    echo -n "."
+    sleep 2
+    ELAPSED=$((ELAPSED + 2))
+    
+    if [ $ELAPSED -ge $MAX_WAIT ]; then
+        echo ""
+        echo -e "${RED}❌ PostgreSQL failed to become ready within ${MAX_WAIT}s${NC}"
+        echo ""
+        echo "Check logs:"
+        echo "  docker compose logs postgres"
         exit 1
     fi
-    echo "  Attempt $i/30..."
-    sleep 2
 done
-
 echo ""
+echo ""
+
+# Verify database schema
 echo "🔍 Verifying database schema..."
-docker compose exec -T postgres psql -U appd_ro -d appd_licensing << 'EOF'
-\echo '============================================'
-\echo 'Database Tables:'
-\echo '============================================'
-SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
+TABLE_COUNT=$(docker compose exec -T postgres psql -U appd_ro -d appd_licensing -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
+
+if [ "$TABLE_COUNT" -gt 0 ]; then
+    echo -e "${GREEN}✅ Database schema initialized (${TABLE_COUNT} tables)${NC}"
+    
+    # Show dimension table counts
+    docker compose exec -T postgres psql -U appd_ro -d appd_licensing << 'EOF'
 \echo ''
-\echo 'Dimension table row counts:'
+\echo 'Dimension Tables:'
 SELECT 'owners_dim' as table_name, COUNT(*) as rows FROM owners_dim
 UNION ALL SELECT 'sectors_dim', COUNT(*) FROM sectors_dim
 UNION ALL SELECT 'architecture_dim', COUNT(*) FROM architecture_dim
 UNION ALL SELECT 'capabilities_dim', COUNT(*) FROM capabilities_dim
 UNION ALL SELECT 'time_dim', COUNT(*) FROM time_dim;
 EOF
-
+else
+    echo -e "${YELLOW}⚠️  WARNING: No tables found. Init scripts may have failed.${NC}"
+    echo "Check logs:"
+    echo "  docker compose logs postgres | grep ERROR"
+fi
 echo ""
+
+# Check Grafana
+if docker compose ps grafana | grep -q "Up"; then
+    echo -e "${GREEN}✅ Grafana is running${NC}"
+else
+    echo -e "${YELLOW}⚠️  WARNING: Grafana may not be healthy${NC}"
+    echo "Check logs:"
+    echo "  docker compose logs grafana"
+fi
+echo ""
+
 echo "=============================================="
-echo -e "${GREEN}✅ Infrastructure Setup Complete!${NC}"
+echo -e "${GREEN}✅ Infrastructure Deployment Complete!${NC}"
 echo "=============================================="
 echo ""
 echo "📍 Services Running:"
@@ -163,26 +238,23 @@ echo ""
 echo "🔐 Grafana Login:"
 echo "   Username: admin"
 echo "   Password: admin"
+echo "   (Change password on first login)"
 echo ""
 echo "🔄 Next Steps - Run ETL Jobs:"
 echo ""
 echo "   # ServiceNow ETL (populate applications from CMDB):"
 echo "   docker compose run --rm etl_snow"
 echo ""
-echo "   # AppDynamics ETL (populate license usage):"
+echo "   # AppDynamics ETL (populate license usage - when ready):"
 echo "   docker compose run --rm etl_appd"
 echo ""
 echo "📊 Verify Data:"
-echo "   ./scripts/utils/verify_setup.sh"
+echo "   docker compose exec postgres psql -U appd_ro -d appd_licensing"
 echo ""
 echo "📝 View Logs:"
 echo "   docker compose logs -f postgres"
 echo "   docker compose logs -f grafana"
 echo "   docker compose logs etl_snow"
-echo "   docker compose logs etl_appd"
-echo ""
-echo "🗄️  Database Access:"
-echo "   docker compose exec postgres psql -U appd_ro -d appd_licensing"
 echo ""
 echo "🛑 Stop Services:"
 echo "   docker compose down"
