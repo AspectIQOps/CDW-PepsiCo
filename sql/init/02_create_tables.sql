@@ -1,12 +1,32 @@
 -- 02_create_tables.sql
 -- Creates all Fact, Dimension, Configuration, and Audit tables required by SoW (Section 2.5.3)
 
+-- Drop tables if they exist (Reverse order of creation due to FK dependencies)
+DROP TABLE IF EXISTS chargeback_fact;
+DROP TABLE IF EXISTS forecast_fact;
+DROP TABLE IF EXISTS license_cost_fact;
+DROP TABLE IF EXISTS license_usage_fact;
+DROP TABLE IF EXISTS data_lineage;
+DROP TABLE IF EXISTS reconciliation_log;
+DROP TABLE IF EXISTS user_actions;
+DROP TABLE IF EXISTS mapping_overrides;
+DROP TABLE IF EXISTS allocation_rules;
+DROP TABLE IF EXISTS price_config;
+DROP TABLE IF EXISTS applications_dim;
+DROP TABLE IF EXISTS time_dim;
+DROP TABLE IF EXISTS capabilities_dim;
+DROP TABLE IF EXISTS architecture_dim;
+DROP TABLE IF EXISTS sectors_dim;
+DROP TABLE IF EXISTS owners_dim;
+DROP TABLE IF EXISTS etl_execution_log;
+
+
 -- ----------------------------------------------------
 -- 1. DIMENSION TABLES (Reordered for dependency resolution)
 -- ----------------------------------------------------
 
 -- Owners dimension (Ownership Hierarchy)
-CREATE TABLE IF NOT EXISTS owners_dim (
+CREATE TABLE owners_dim (
     owner_id SERIAL PRIMARY KEY,
     owner_name TEXT NOT NULL, -- Primary owner/manager name
     organizational_hierarchy TEXT, -- e.g., 'PepsiCo/Global IT/Infrastructure'
@@ -14,27 +34,37 @@ CREATE TABLE IF NOT EXISTS owners_dim (
 );
 
 -- Sectors dimension (Business Sectors)
-CREATE TABLE IF NOT EXISTS sectors_dim (
+CREATE TABLE sectors_dim (
     sector_id SERIAL PRIMARY KEY,
     sector_name TEXT UNIQUE NOT NULL -- e.g., 'Beverages North America', 'Frito Lay'
 );
 
 -- Architecture dimension (Monolith/Microservices)
-CREATE TABLE IF NOT EXISTS architecture_dim (
+CREATE TABLE architecture_dim (
     architecture_id SERIAL PRIMARY KEY,
     pattern_name TEXT UNIQUE NOT NULL, -- e.g., 'Monolith', 'Microservices'
     description TEXT
 );
 
 -- Capabilities dimension (License Types: APM, RUM, Synthetic, DB)
-CREATE TABLE IF NOT EXISTS capabilities_dim (
+CREATE TABLE capabilities_dim (
     capability_id SERIAL PRIMARY KEY,
     capability_code TEXT UNIQUE NOT NULL, -- e.g., 'APM', 'RUM', 'SYNTHETIC'
     description TEXT
 );
 
+-- Time dimension (Granularity for reporting, pre-populated)
+CREATE TABLE time_dim (
+    ts TIMESTAMP PRIMARY KEY,
+    year INT NOT NULL,
+    month INT NOT NULL,
+    day INT NOT NULL,
+    yyyy_mm TEXT NOT NULL
+);
+
+
 -- Applications dimension (CMDB & AppD linkage) - REFERENCES are now valid
-CREATE TABLE IF NOT EXISTS applications_dim (
+CREATE TABLE applications_dim (
     app_id SERIAL PRIMARY KEY,
     appd_application_id INT UNIQUE,
     appd_application_name TEXT NOT NULL,
@@ -52,21 +82,13 @@ CREATE TABLE IF NOT EXISTS applications_dim (
     updated_at TIMESTAMP DEFAULT now()
 );
 
--- Time dimension (Granularity for reporting, pre-populated)
-CREATE TABLE IF NOT EXISTS time_dim (
-    ts TIMESTAMP PRIMARY KEY,
-    year INT NOT NULL,
-    month INT NOT NULL,
-    day INT NOT NULL,
-    yyyy_mm TEXT NOT NULL
-);
 
 -- ----------------------------------------------------
 -- 2. CONFIGURATION TABLES
 -- ----------------------------------------------------
 
 -- Price configuration (Contract-based pricing with renewal periods)
-CREATE TABLE IF NOT EXISTS price_config (
+CREATE TABLE price_config (
     price_id SERIAL PRIMARY KEY,
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
     tier TEXT NOT NULL, -- 'Peak' or 'Pro'
@@ -77,7 +99,7 @@ CREATE TABLE IF NOT EXISTS price_config (
 );
 
 -- Allocation rules (Shared service cost distribution logic)
-CREATE TABLE IF NOT EXISTS allocation_rules (
+CREATE TABLE allocation_rules (
     rule_id SERIAL PRIMARY KEY,
     rule_name TEXT NOT NULL,
     distribution_method TEXT NOT NULL, -- e.g., 'Equal Split', 'Usage Weight'
@@ -87,7 +109,7 @@ CREATE TABLE IF NOT EXISTS allocation_rules (
 );
 
 -- Mapping overrides (Manual reconciliation UI for exceptions)
-CREATE TABLE IF NOT EXISTS mapping_overrides (
+CREATE TABLE mapping_overrides (
     override_id SERIAL PRIMARY KEY,
     source_system TEXT NOT NULL, -- 'AppDynamics' or 'ServiceNow'
     source_key TEXT NOT NULL, -- The unmatched key (e.g., AppD Application Name)
@@ -104,7 +126,7 @@ CREATE TABLE IF NOT EXISTS mapping_overrides (
 -- ----------------------------------------------------
 
 -- License usage fact (Granular daily usage metrics)
-CREATE TABLE IF NOT EXISTS license_usage_fact (
+CREATE TABLE license_usage_fact (
     ts TIMESTAMP NOT NULL REFERENCES time_dim(ts),
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
@@ -116,7 +138,7 @@ CREATE TABLE IF NOT EXISTS license_usage_fact (
 );
 
 -- License cost fact (Calculated costs with full attribution)
-CREATE TABLE IF NOT EXISTS license_cost_fact (
+CREATE TABLE license_cost_fact (
     ts TIMESTAMP NOT NULL REFERENCES time_dim(ts),
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
@@ -127,7 +149,7 @@ CREATE TABLE IF NOT EXISTS license_cost_fact (
 );
 
 -- Forecast fact (Prediction data for 12, 18, 24-month projections)
-CREATE TABLE IF NOT EXISTS forecast_fact (
+CREATE TABLE forecast_fact (
     month_start DATE NOT NULL,
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
     capability_id INT NOT NULL REFERENCES capabilities_dim(capability_id),
@@ -141,7 +163,7 @@ CREATE TABLE IF NOT EXISTS forecast_fact (
 );
 
 -- Chargeback fact (Monthly department charges)
-CREATE TABLE IF NOT EXISTS chargeback_fact (
+CREATE TABLE chargeback_fact (
     month_start DATE NOT NULL,
     app_id INT NOT NULL REFERENCES applications_dim(app_id),
     h_code TEXT, -- The final resolved H-code for charging
@@ -158,7 +180,7 @@ CREATE TABLE IF NOT EXISTS chargeback_fact (
 -- ----------------------------------------------------
 
 -- ETL execution log (Job history)
-CREATE TABLE IF NOT EXISTS etl_execution_log (
+CREATE TABLE etl_execution_log (
     run_id SERIAL PRIMARY KEY,
     job_name TEXT NOT NULL, -- e.g., 'appd_full_load', 'snow_incremental'
     started_at TIMESTAMP DEFAULT now(),
@@ -169,7 +191,7 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
 );
 
 -- Data lineage (Full audit trail of data changes)
-CREATE TABLE IF NOT EXISTS data_lineage (
+CREATE TABLE data_lineage (
     lineage_id SERIAL PRIMARY KEY,
     run_id INT REFERENCES etl_execution_log(run_id),
     source_system TEXT,
@@ -181,7 +203,7 @@ CREATE TABLE IF NOT EXISTS data_lineage (
 );
 
 -- Reconciliation log (Matching history)
-CREATE TABLE IF NOT EXISTS reconciliation_log (
+CREATE TABLE reconciliation_log (
     reconciliation_id SERIAL PRIMARY KEY,
     match_run_ts TIMESTAMP DEFAULT now(),
     source_a TEXT, -- 'AppDynamics'
@@ -194,7 +216,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_log (
 );
 
 -- User actions (Administrative changes)
-CREATE TABLE IF NOT EXISTS user_actions (
+CREATE TABLE user_actions (
     action_id SERIAL PRIMARY KEY,
     user_name TEXT NOT NULL,
     action_type TEXT NOT NULL, -- e.g., 'PRICE_UPDATE', 'MAPPING_OVERRIDE'
