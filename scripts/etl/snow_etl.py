@@ -101,10 +101,12 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
             fields.append(f)
             values.append(v)
 
+    placeholders = sql.SQL(', ').join([sql.Placeholder()] * len(values))
+
     query_insert = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING {pk}").format(
         table=sql.Identifier(table_name),
         fields=sql.SQL(', ').join(map(sql.Identifier, fields)),
-        values=sql.SQL(', ').join(sql.Placeholder() * len(values)),
+        values=placeholders,
         pk=sql.Identifier(pk_field)
     )
 
