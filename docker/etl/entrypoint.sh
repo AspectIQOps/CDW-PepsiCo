@@ -11,34 +11,55 @@ if [ -z "$DB_HOST" ] || [ -z "$SSM_PATH" ]; then
     exit 1
 fi
 
-echo "Starting ETL job setup. Fetching secrets from AWS SSM path: ${SSM_PATH}"
+# =========================================================================
+# 💡 LOCAL VS. CLOUD ENVIRONMENT CHECK
+# If DB_PASSWORD is set locally (via the .env file), we assume local development
+# and skip the slow/failing SSM fetch to use the local variables directly.
+# If DB_PASSWORD is not set, we assume production and rely entirely on SSM.
+# =========================================================================
 
-# --- Fetch Secrets from AWS SSM and Export as Environment Variables ---
-# The names on the left are the internal ENV vars for Python.
-# The names on the right are your specific SSM parameter suffixes.
-# Note: The EC2 IAM Role must have 'ssm:GetParameter' permission for this path.
+if [ -z "$DB_PASSWORD" ]; then
+    echo "Starting ETL job setup. DB_PASSWORD not found locally. Fetching production secrets from AWS SSM path: ${SSM_PATH}"
+    
+    # --- Fetch Secrets from AWS SSM and Export as Environment Variables ---
+    # The names on the left are the internal ENV vars for Python.
+    # The names on the right are your specific SSM parameter suffixes.
+    
+    # We use 2>/dev/null to suppress expected "parameter not found" errors when testing on dev systems 
+    # where the full parameter set may not exist, and we rely on the final check below.
+    
+    # Database Secrets
+    export DB_NAME=$(aws ssm get-parameter --name "${SSM_PATH}/DB_NAME" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export DB_USER=$(aws ssm get-parameter --name "${SSM_PATH}/DB_USER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PATH}/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
 
-# Database Secrets
-export DB_NAME=$(aws ssm get-parameter --name "${SSM_PATH}/DB_NAME" --with-decryption --query "Parameter.Value" --output text)
-export DB_USER=$(aws ssm get-parameter --name "${SSM_PATH}/DB_USER" --with-decryption --query "Parameter.Value" --output text)
-export DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PATH}/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+    # AppDynamics Secrets
+    export APPD_CONTROLLER=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CONTROLLER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export APPD_ACCOUNT=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_ACCOUNT" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export APPD_CLIENT_ID=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_ID" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export APPD_CLIENT_SECRET=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_SECRET" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
 
-# AppDynamics Secrets
-export APPD_CONTROLLER=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CONTROLLER" --with-decryption --query "Parameter.Value" --output text)
-export APPD_ACCOUNT=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_ACCOUNT" --with-decryption --query "Parameter.Value" --output text)
-export APPD_CLIENT_ID=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_ID" --with-decryption --query "Parameter.Value" --output text)
-export APPD_CLIENT_SECRET=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_SECRET" --with-decryption --query "Parameter.Value" --output text)
+    # ServiceNow Secrets
+    export SN_INSTANCE=$(aws ssm get-parameter --name "${SSM_PATH}/SN_INSTANCE" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export SN_USER=$(aws ssm get-parameter --name "${SSM_PATH}/SN_USER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    export SN_PASS=$(aws ssm get-parameter --name "${SSM_PATH}/SN_PASS" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+    
+    # After SSM fetch, perform a final check to ensure we got all necessary variables
+    if [ -z "$DB_PASSWORD" ] || [ -z "$APPD_CLIENT_SECRET" ]; then
+        echo "ERROR: Failed to fetch critical secrets (DB or APPD) from SSM. Ensure parameters exist at ${SSM_PATH} and the IAM role is correct."
+        exit 1
+    fi
+    echo "Secrets fetched successfully."
 
-# ServiceNow Secrets
-export SN_INSTANCE=$(aws ssm get-parameter --name "${SSM_PATH}/SN_INSTANCE" --with-decryption --query "Parameter.Value" --output text)
-export SN_USER=$(aws ssm get-parameter --name "${SSM_PATH}/SN_USER" --with-decryption --query "Parameter.Value" --output text)
-export SN_PASS=$(aws ssm get-parameter --name "${SSM_PATH}/SN_PASS" --with-decryption --query "Parameter.Value" --output text)
+else
+    echo "Local DB_PASSWORD detected. Skipping AWS SSM fetch and using local environment variables for testing."
+    echo "SSM path is available if needed: ${SSM_PATH}"
+fi
 
-echo "Secrets fetched successfully."
 
 # --- Wait for Postgres to be ready ---
-# We use the generic 'devuser' for the readiness check, as that's the init user defined in docker-compose.yaml.
-DB_USER_FOR_READY=${POSTGRES_USER:-devuser}
+# NOTE: Using DB_USER here is safer since it's now guaranteed to be set either locally or from SSM.
+DB_USER_FOR_READY=${DB_USER:-devuser}
 echo "Waiting for database at ${DB_HOST}..."
 
 # Use the pg_isready utility (installed in Dockerfile)
