@@ -1,51 +1,37 @@
+version: '3.8'
+
 services:
-  # ---------------------------------
-  # 1. PostgreSQL Database (v16)
-  # ---------------------------------
+  # ==========================================================
+  # PostgreSQL Database Service
+  # ==========================================================
   postgres:
-    # Retaining Postgres 16 image as per your original configuration
     image: postgres:16
     container_name: pepsico-postgres
     restart: unless-stopped
     environment:
-      # CRITICAL: These are the internal user/pass for Docker initialization only.
-      # The ETL scripts use the secure credentials fetched from AWS SSM.
-      # --- UPDATED DB_USER to appd_ro ---
+      # These credentials are used by the PostgreSQL server itself.
+      # The ETL scripts use the same values for local testing (from .env)
       - POSTGRES_USER=appd_ro
-      # --- UPDATED PLACEHOLDER PASSWORD ---
       - POSTGRES_PASSWORD=appd_pass
-      # --- UPDATED DB_NAME to appd_licensing ---
       - POSTGRES_DB=appd_licensing
-      
-      # *** FIX APPLIED HERE: Replaced POSTGRES_INITDB_ARGS to fix the locale error. ***
-      # We explicitly set reliable UTF-8 compatible locales. 
-      - LC_ALL=C.UTF-8 
-      - LANG=C.UTF-8
-      
-    ports:
-      - "5432:5432"
-      
+      - TZ=America/New_York
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # *** RETAINED: This is crucial for running your initial SQL scripts (02_create_tables.sql). ***
+      # Volume to inject SQL schema setup scripts
       - ./sql/init:/docker-entrypoint-initdb.d:ro
-      
-    healthcheck:
-      # Explicitly check localhost (TCP) to ensure the database service is ready
-      # --- UPDATED User (appd_ro) and DB Name (appd_licensing) for healthcheck ---
-      test: ["CMD-SHELL", "pg_isready -h localhost -U appd_ro -d appd_licensing"]
-      interval: 10s
-      timeout: 5s
-      # RETAINED: Increased retries and start_period for robust startup
-      retries: 8
-      start_period: 30s
-      
+    ports:
+      - "5432:5432"
     networks:
       - pepsico-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appd_ro -d appd_licensing"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # ---------------------------------
-  # 2. Grafana Visualization
-  # ---------------------------------
+  # ==========================================================
+  # Grafana Visualization Service
+  # ==========================================================
   grafana:
     image: grafana/grafana:12.2.1
     container_name: pepsico-grafana
@@ -53,63 +39,58 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3000:3000"
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - TZ=America/New_York
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - pepsico-network
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    networks:
-      - pepsico-network
+      retries: 3
 
-  # ---------------------------------
-  # 3. AppDynamics ETL Service (On-Demand Runner)
-  # ---------------------------------
+  # ==========================================================
+  # ETL Services (AppDynamics & ServiceNow)
+  # ==========================================================
   etl_appd:
     build:
       context: .
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-appd
     restart: "no"
-    command: ["python", "scripts/etl/appd_etl.py"]
-    environment:
-      - DB_HOST=postgres
-      # UPDATED: Using the new SSM prefix
-      - SSM_PATH=/aspectiq/demo
-      - TZ=America/New_York
+    command: ["/bin/bash", "/app/docker/etl/entrypoint.sh", "python", "scripts/etl/appd_etl.py"]
+    # CRITICAL FIX: Explicitly load variables from .env to bypass automatic loading issues.
+    env_file: .env
     volumes:
-      - ./scripts/etl:/app/scripts/etl:ro
+      - ./scripts:/app/scripts:ro
+      - ./docker/etl:/app/docker/etl:ro
     networks:
       - pepsico-network
     depends_on:
       postgres:
         condition: service_healthy
 
-  # ---------------------------------
-  # 4. ServiceNow ETL Service (On-Demand Runner)
-  # ---------------------------------
   etl_snow:
     build:
       context: .
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-snow
     restart: "no"
-    command: ["python", "scripts/etl/snow_etl.py"]
-    environment:
-      - DB_HOST=postgres
-      # UPDATED: Using the new SSM prefix
-      - SSM_PATH=/aspectiq/demo
-      - TZ=America/New_York
+    command: ["/bin/bash", "/app/docker/etl/entrypoint.sh", "python", "scripts/etl/snow_etl.py"]
+    # CRITICAL FIX: Explicitly load variables from .env to bypass automatic loading issues.
+    env_file: .env
     volumes:
-      - ./scripts/etl:/app/scripts/etl:ro
+      - ./scripts:/app/scripts:ro
+      - ./docker/etl:/app/docker/etl:ro
     networks:
       - pepsico-network
     depends_on:
