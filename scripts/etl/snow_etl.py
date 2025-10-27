@@ -1,5 +1,10 @@
+#!/usr/bin/env python3
+"""
+ServiceNow ETL Script
+Pulls CMDB data from ServiceNow and upserts into PostgreSQL applications_dim table
+"""
+
 import psycopg2
-from psycopg2 import sql
 from datetime import datetime
 import os
 import time
@@ -36,7 +41,7 @@ MOCK_SNOW_DATA = [
         'sn_service_name': 'HR Payroll System',
         'owner_name': 'Harold Finch',
         'sector_name': 'Human Resources', 
-        'architecture_pattern': 'SaaS', 
+        'architecture_pattern': 'Hybrid', 
         'h_code': 'HR-PAY-300',
         'support_group': 'HR Support'
     },
@@ -57,15 +62,25 @@ def connect_db(max_retries=5):
         except psycopg2.OperationalError as e:
             print(f"Database connection failed (Attempt {i+1}/{max_retries}): {e}")
             if i < max_retries - 1:
-                time.sleep(2 ** i) # Exponential backoff
+                time.sleep(2 ** i)  # Exponential backoff
             else:
                 raise
 
 def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     """
     Generic function to INSERT or SELECT a dimension record and return its ID.
+    
+    Args:
+        cursor: Database cursor
+        table_name: Name of dimension table (e.g., 'owners_dim')
+        name_field: Name of the field to match on (e.g., 'owner_name')
+        name_value: Value to search for or insert
+        other_fields: Optional dict of additional fields to insert
+        
+    Returns:
+        int: The primary key ID of the dimension record
     """
-    # FIX: Handle irregular pluralization
+    # Handle irregular pluralization for primary key names
     pk_field_map = {
         'owners_dim': 'owner_id',
         'sectors_dim': 'sector_id',
@@ -75,9 +90,10 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     
     pk_field = pk_field_map.get(table_name)
     if not pk_field:
+        # Fallback: remove '_dim' and add '_id'
         pk_field = table_name.replace('_dim', '_id')
     
-    # 1. Check if record exists
+    # 1. Check if the record exists
     query_select = f'SELECT {pk_field} FROM {table_name} WHERE {name_field} = %s'
     cursor.execute(query_select, (name_value,))
     
@@ -85,7 +101,7 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     if result:
         return result[0]
 
-    # 2. Insert new record
+    # 2. Record doesn't exist, insert it
     print(f"    -> Inserting new record into {table_name}: {name_value}")
     
     fields = [name_field]
@@ -108,6 +124,13 @@ def upsert_application(conn, app_data):
     """
     Processes a single ServiceNow application record, handles dimension lookups/upserts,
     and upserts the final record into applications_dim using sn_sys_id as the merge key.
+    
+    Args:
+        conn: Database connection
+        app_data: Dictionary containing ServiceNow application data
+        
+    Returns:
+        bool: True if successful, False otherwise
     """
     cursor = conn.cursor()
     sn_id = app_data['sn_sys_id']
@@ -154,40 +177,40 @@ def upsert_application(conn, app_data):
             'updated_at': datetime.now()
         }
         
-        fields = list(update_data.keys())
-        values = list(update_data.values())
-        
         # Check if the record already exists based on sn_sys_id
         cursor.execute("SELECT app_id FROM applications_dim WHERE sn_sys_id = %s", (sn_id,))
         existing_id = cursor.fetchone()
         
         if existing_id:
-            # Case 1: UPDATE (Update all SNOW-related fields and dimension FKs)
-            set_clause = sql.SQL(', ').join([
-                sql.SQL('{0} = %s').format(sql.Identifier(k)) for k in update_data.keys()
-            ])
-            update_query = sql.SQL("UPDATE applications_dim SET {set_clause} WHERE sn_sys_id = %s").format(set_clause=set_clause)
+            # Case 1: UPDATE existing record
+            set_parts = [f"{k} = %s" for k in update_data.keys()]
+            set_clause = ', '.join(set_parts)
+            values = list(update_data.values())
+            
+            update_query = f"UPDATE applications_dim SET {set_clause} WHERE sn_sys_id = %s"
             
             cursor.execute(update_query, values + [sn_id])
             print(f"    -> Successfully UPDATED application (ID: {existing_id[0]}) using SNOW data.")
             
         else:
-            # Case 2: INSERT (Must include temp values for NOT NULL AppDynamics fields)
-            appd_name_placeholder = f"SNOW-TEMP-Service ({app_data['sn_service_name']})"
-            appd_id_placeholder = random.randint(3000, 9000) 
+            # Case 2: INSERT new record
+            # Note: appd_application_name and appd_application_id can be NULL in schema
+            # but if they're NOT NULL, we need placeholder values
             
-            # Prepare fields and values for INSERT
-            fields.extend(['sn_sys_id', 'appd_application_name', 'appd_application_id'])
-            values.extend([sn_id, appd_name_placeholder, appd_id_placeholder])
+            # Add sn_sys_id to the insert
+            insert_data = update_data.copy()
+            insert_data['sn_sys_id'] = sn_id
             
-            insert_query = sql.SQL("INSERT INTO applications_dim ({fields}) VALUES ({values})").format(
-                fields=sql.SQL(', ').join(map(sql.Identifier, fields)),
-                values=sql.SQL(', ').join(sql.Placeholder * len(values))
-            )
+            fields = list(insert_data.keys())
+            values = list(insert_data.values())
+            
+            fields_str = ', '.join(fields)
+            placeholders = ', '.join(['%s'] * len(values))
+            
+            insert_query = f"INSERT INTO applications_dim ({fields_str}) VALUES ({placeholders})"
             
             cursor.execute(insert_query, values)
-            print(f"    -> Successfully INSERTED new service (Temp AppD link created).")
-
+            print(f"    -> Successfully INSERTED new service from ServiceNow.")
 
         conn.commit()
         return True
@@ -199,26 +222,36 @@ def upsert_application(conn, app_data):
     finally:
         cursor.close()
 
+
 def run_snow_etl():
     """Main function to run the ServiceNow ETL process."""
     conn = None
     try:
+        print("=" * 60)
+        print("ServiceNow ETL Starting")
+        print("=" * 60)
+        
         conn = connect_db()
-        print("Starting ServiceNow ETL Process...")
         
         success_count = 0
         for app_data in MOCK_SNOW_DATA:
             if upsert_application(conn, app_data):
                 success_count += 1
-                
-        print(f"\nServiceNow ETL Finished. Successful operations: {success_count}/{len(MOCK_SNOW_DATA)}")
+        
+        print("\n" + "=" * 60)
+        print(f"ServiceNow ETL Finished")
+        print(f"Successful operations: {success_count}/{len(MOCK_SNOW_DATA)}")
+        print("=" * 60)
 
     except Exception as e:
-        print(f"FATAL ETL ERROR: {e}")
+        print(f"\nFATAL ETL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         if conn:
             conn.close()
             print("Database connection closed.")
+
 
 if __name__ == '__main__':
     run_snow_etl()
