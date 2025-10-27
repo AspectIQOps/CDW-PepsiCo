@@ -15,3 +15,6 @@ __pycache__/
 
 # Virtual environment
 venv/
+
+#Temp Documentation
+docs/
