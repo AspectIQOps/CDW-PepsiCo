@@ -75,22 +75,17 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     
     pk_field = pk_field_map.get(table_name)
     if not pk_field:
-        # Fallback for other tables
         pk_field = table_name.replace('_dim', '_id')
     
-    # 1. Check if the record exists
-    query_select = sql.SQL("SELECT {pk} FROM {table} WHERE {name_f} = %s").format(
-        pk=sql.Identifier(pk_field),
-        table=sql.Identifier(table_name),
-        name_f=sql.Identifier(name_field)
-    )
+    # 1. Check if record exists
+    query_select = f'SELECT {pk_field} FROM {table_name} WHERE {name_field} = %s'
     cursor.execute(query_select, (name_value,))
     
     result = cursor.fetchone()
     if result:
         return result[0]
 
-    # 2. If it does not exist, insert it
+    # 2. Insert new record
     print(f"    -> Inserting new record into {table_name}: {name_value}")
     
     fields = [name_field]
@@ -101,15 +96,10 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
             fields.append(f)
             values.append(v)
 
-    placeholders = sql.SQL(', ').join([sql.Placeholder()] * len(values))
-
-    query_insert = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING {pk}").format(
-        table=sql.Identifier(table_name),
-        fields=sql.SQL(', ').join(map(sql.Identifier, fields)),
-        values=placeholders,
-        pk=sql.Identifier(pk_field)
-    )
-
+    fields_str = ', '.join(fields)
+    placeholders = ', '.join(['%s'] * len(values))
+    
+    query_insert = f"INSERT INTO {table_name} ({fields_str}) VALUES ({placeholders}) RETURNING {pk_field}"
     cursor.execute(query_insert, values)
     return cursor.fetchone()[0]
 
