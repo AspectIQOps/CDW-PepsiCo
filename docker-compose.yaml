@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   # ---------------------------------
   # 1. PostgreSQL Database (v16)
   # ---------------------------------
   postgres:
-    image: postgres:16 
+    image: postgres:16
     container_name: pepsico-postgres
     restart: unless-stopped
     environment:
@@ -21,10 +19,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U devuser -d appdynamics"]
+      # Explicitly check localhost (TCP) to ensure the database service is ready
+      test: ["CMD-SHELL", "pg_isready -h localhost -U devuser -d appdynamics"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      # Increased retries and added start_period to allow more time for database initialization and volume mounting
+      retries: 8
+      start_period: 30s
     networks:
       - pepsico-network
 
