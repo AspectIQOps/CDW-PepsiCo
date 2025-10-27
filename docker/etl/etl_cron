@@ -1,2 +1,0 @@
-# Run ETL every hour
-0 * * * * root /usr/local/bin/python /app/etl/appd_etl.py >> /var/log/etl.log 2>&1

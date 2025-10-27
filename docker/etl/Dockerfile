@@ -1,14 +1,15 @@
 FROM python:3.12-slim
 
-# Set working directory
-WORKDIR /app/etl
+# Set working directory to a simple /app (cleaner paths)
+WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cron \
-    curl \
-    unzip \
-    git \
+    # CRITICAL: aws-cli to fetch secrets from SSM
+    aws-cli \
+    # CRITICAL: postgresql-client for 'pg_isready' health check in entrypoint
+    postgresql-client \
+    # Clean up APT cache to keep the image small
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python requirements
@@ -16,22 +17,15 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Use --no-cache-dir to minimize final image size
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy ETL scripts
-COPY scripts/ /app/etl
+# Copy entrypoint script
+COPY docker/etl/entrypoint.sh /app/entrypoint.sh
 
-# Copy cron schedule file
-COPY docker/etl/etl_cron /etc/cron.d/etl-cron
-RUN chmod 0644 /etc/cron.d/etl-cron \
-    && crontab /etc/cron.d/etl-cron
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
 
-# Copy entrypoint
-COPY docker/etl/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Copy .env for internal ETL use
-COPY .env /opt/appd-licensing/.env
-
-# Set entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+# Set entrypoint (this script runs BEFORE any Python code)
+ENTRYPOINT ["/app/entrypoint.sh"]
+# The final CMD (which Python script to run) is set in docker-compose.yaml
