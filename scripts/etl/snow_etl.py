@@ -65,7 +65,18 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     """
     Generic function to INSERT or SELECT a dimension record and return its ID.
     """
-    pk_field = table_name[:-4] + '_id'
+    # FIX: Handle irregular pluralization
+    pk_field_map = {
+        'owners_dim': 'owner_id',
+        'sectors_dim': 'sector_id',
+        'architecture_dim': 'architecture_id',
+        'capabilities_dim': 'capability_id'
+    }
+    
+    pk_field = pk_field_map.get(table_name)
+    if not pk_field:
+        # Fallback for other tables
+        pk_field = table_name.replace('_dim', '_id')
     
     # 1. Check if the record exists
     query_select = sql.SQL("SELECT {pk} FROM {table} WHERE {name_f} = %s").format(
@@ -93,7 +104,7 @@ def _upsert_dim(cursor, table_name, name_field, name_value, other_fields=None):
     query_insert = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING {pk}").format(
         table=sql.Identifier(table_name),
         fields=sql.SQL(', ').join(map(sql.Identifier, fields)),
-        values=sql.SQL(', ').join(sql.Placeholder * len(values)),
+        values=sql.SQL(', ').join(sql.Placeholder() * len(values)),
         pk=sql.Identifier(pk_field)
     )
 
