@@ -1,0 +1,637 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as apm_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE c.capability_code = 'APM'\n  AND lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "APM Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as mrum_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE c.capability_code = 'MRUM'\n  AND lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "MRUM Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as synthetic_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE c.capability_code = 'Synthetic'\n  AND lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "Synthetic Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as db_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE c.capability_code = 'DB'\n  AND lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "DB Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "SELECT \n  DATE(lu.ts) as time,\n  c.capability_code as metric,\n  COALESCE(SUM(lu.units_consumed), 0) as value\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\nGROUP BY DATE(lu.ts), c.capability_code\nORDER BY DATE(lu.ts), c.capability_code",
+          "refId": "A"
+        }
+      ],
+      "title": "Usage Trend by License Type (90 Days)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "max": 100000,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "id": 6,
+      "options": {
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showUnfilled": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  c.capability_code || ' - ' || lu.tier as license_tier,\n  COALESCE(SUM(lu.units_consumed), 0) as total_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY c.capability_code, lu.tier\nORDER BY total_units DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Usage by License Type & Tier",
+      "type": "bargauge"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  c.capability_code as license_type,\n  COALESCE(SUM(lu.units_consumed), 0) as total_units\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY c.capability_code\nORDER BY total_units DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "License Type Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total Units"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Daily"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Peak"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total Units"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  c.capability_code as \"License Type\",\n  lu.tier as \"Tier\",\n  COALESCE(SUM(lu.units_consumed), 0) as \"Total Units\",\n  COALESCE(AVG(lu.units_consumed), 0) as \"Avg Daily\",\n  COALESCE(MAX(lu.units_consumed), 0) as \"Peak\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_application_name, c.capability_code, lu.tier\nORDER BY \"Total Units\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Usage Breakdown",
+      "type": "table"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  c.capability_code as metric,\n  COALESCE(AVG(lu.units_consumed), 0) as value\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY c.capability_code\nORDER BY value DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Units per Application by License Type",
+      "type": "stat"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "pepsico",
+    "appdynamics",
+    "usage"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PepsiCo AppDynamics - Usage by License Type",
+  "uid": "pepsico-usage-by-license",
+  "version": 0,
+  "weekStart": ""
+}

@@ -1,0 +1,696 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actual Cost"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected Cost"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "-- Historical actual data\nSELECT \n  DATE(ts) as time,\n  'Actual Cost' as metric,\n  COALESCE(SUM(usd_cost), 0) as value\nFROM license_cost_fact\nWHERE ts >= $__timeFrom()::timestamptz\n  AND ts <= $__timeTo()::timestamptz\nGROUP BY DATE(ts)\n\nUNION ALL\n\n-- Forecasted data\nSELECT \n  month_start as time,\n  'Projected Cost' as metric,\n  COALESCE(SUM(projected_cost), 0) as value\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start\n\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Historical + Forecast Combined (Actual vs Projected)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "High Confidence"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Low Confidence"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "SELECT \n  month_start as time,\n  'Projected' as metric,\n  COALESCE(SUM(projected_cost), 0) as value\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start\n\nUNION ALL\n\nSELECT \n  month_start as time,\n  'High Confidence' as metric,\n  COALESCE(SUM(confidence_interval_high), 0) as value\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start\n\nUNION ALL\n\nSELECT \n  month_start as time,\n  'Low Confidence' as metric,\n  COALESCE(SUM(confidence_interval_low), 0) as value\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start\n\nORDER BY time, metric",
+          "refId": "A"
+        }
+      ],
+      "title": "Forecast Confidence Intervals (Next 12 Months)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total 12-mo Projected"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Q[1-4]"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 3,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total 12-mo Projected"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "WITH quarterly_forecast AS (\n  SELECT \n    a.appd_application_name,\n    f.month_start,\n    EXTRACT(QUARTER FROM f.month_start) as quarter,\n    EXTRACT(YEAR FROM f.month_start) as year,\n    SUM(f.projected_cost) as projected_cost\n  FROM forecast_fact f\n  JOIN applications_dim a ON f.app_id = a.app_id\n  WHERE f.month_start >= DATE_TRUNC('month', CURRENT_DATE)\n    AND f.month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\n  GROUP BY a.appd_application_name, f.month_start\n)\nSELECT \n  appd_application_name as \"Application\",\n  COALESCE(SUM(projected_cost), 0) as \"Total 12-mo Projected\",\n  COALESCE(SUM(CASE WHEN quarter = 1 THEN projected_cost ELSE 0 END), 0) as \"Q1\",\n  COALESCE(SUM(CASE WHEN quarter = 2 THEN projected_cost ELSE 0 END), 0) as \"Q2\",\n  COALESCE(SUM(CASE WHEN quarter = 3 THEN projected_cost ELSE 0 END), 0) as \"Q3\",\n  COALESCE(SUM(CASE WHEN quarter = 4 THEN projected_cost ELSE 0 END), 0) as \"Q4\"\nFROM quarterly_forecast\nGROUP BY appd_application_name\nORDER BY \"Total 12-mo Projected\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Projected Cost by Application (Next 12 Months by Quarter)",
+      "type": "table"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "id": 4,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "-- Placeholder for year-over-year comparison\n-- This will show actual data when we have multiple years\nSELECT \n  EXTRACT(YEAR FROM month_start)::text as year,\n  COALESCE(SUM(usd_amount), 0) as \"Total Cost\"\nFROM chargeback_fact\nWHERE month_start >= $__timeFrom()::timestamptz\n  AND month_start <= $__timeTo()::timestamptz\nGROUP BY EXTRACT(YEAR FROM month_start)\nORDER BY year",
+          "refId": "A"
+        }
+      ],
+      "title": "Year-over-Year Comparison (When Available)",
+      "type": "barchart"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "SELECT \n  month_start as time,\n  method as metric,\n  COALESCE(SUM(projected_cost), 0) as value\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start, method\nORDER BY month_start, method",
+          "refId": "A"
+        }
+      ],
+      "title": "Forecast by Method (Algorithm Comparison)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected Cost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected Units"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 6,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  TO_CHAR(month_start, 'YYYY-MM') as \"Month\",\n  COALESCE(SUM(projected_units), 0) as \"Projected Units\",\n  COALESCE(SUM(projected_cost), 0) as \"Projected Cost\"\nFROM forecast_fact\nWHERE month_start >= DATE_TRUNC('month', CURRENT_DATE)\n  AND month_start <= DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'\nGROUP BY month_start\nORDER BY month_start",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Projection Summary (Next 12 Months)",
+      "type": "table"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "pepsico",
+    "appdynamics",
+    "trends",
+    "forecasts"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PepsiCo AppDynamics - Trends & Forecasts",
+  "uid": "pepsico-trends-forecasts",
+  "version": 0,
+  "weekStart": ""
+}

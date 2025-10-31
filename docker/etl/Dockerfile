@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # CRITICAL: postgresql-client for 'pg_isready' health check in entrypoint
+    # CRITICAL: postgresql-client for 'pg_isready' health check and 'psql' for running SQL scripts
     postgresql-client \
     # Clean up APT cache to keep the image small
     && rm -rf /var/lib/apt/lists/*
@@ -18,7 +18,11 @@ RUN pip install awscli
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip list | grep -E 'scipy|numpy|psycopg2'  # Verify critical packages
+
+# Copy SQL schema files
+COPY sql/init sql/init
 
 # Copy application scripts
 COPY scripts/etl scripts/etl
@@ -31,5 +35,5 @@ RUN chmod +x entrypoint.sh
 ENV PYTHONPATH=/app/scripts
 ENV ETL_USER=devuser
 
-# Default command to run the AppD ETL, the snow ETL will override this
-CMD ["./entrypoint.sh", "python", "scripts/etl/appd_etl.py"]
+# Default command is now to run the full, orchestrated pipeline defined in entrypoint.sh
+CMD ["./entrypoint.sh"]

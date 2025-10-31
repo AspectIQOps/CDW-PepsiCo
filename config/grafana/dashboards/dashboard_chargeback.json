@@ -1,0 +1,665 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direct Costs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Allocated Costs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(CASE WHEN c.chargeback_cycle = 'direct' THEN c.usd_amount ELSE 0 END), 0) as \"Direct Costs\",\n  COALESCE(SUM(CASE WHEN c.chargeback_cycle != 'direct' THEN c.usd_amount ELSE 0 END), 0) as \"Allocated Costs\",\n  COALESCE(SUM(c.usd_amount), 0) as \"Total\"\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY s.sector_name\nORDER BY \"Total\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Chargeback Summary by Sector",
+      "type": "table"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "SELECT \n  c.month_start as time,\n  COALESCE(s.sector_name, 'Unknown') as metric,\n  COALESCE(SUM(c.usd_amount), 0) as value\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nWHERE c.month_start >= $__timeFrom()::timestamptz\n  AND c.month_start <= $__timeTo()::timestamptz\nGROUP BY c.month_start, s.sector_name\nORDER BY c.month_start, s.sector_name",
+          "refId": "A"
+        }
+      ],
+      "title": "Chargeback Trend by Sector Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total Amount"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 3,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total Amount"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(c.h_code, 'Unknown') as \"H-Code\",\n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(o.owner_name, 'Unknown') as \"Owner\",\n  COUNT(DISTINCT a.app_id) as \"App Count\",\n  COALESCE(SUM(c.usd_amount), 0) as \"Total Amount\"\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nLEFT JOIN owners_dim o ON c.owner_id = o.owner_id\nLEFT JOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY c.h_code, s.sector_name, o.owner_name\nORDER BY \"Total Amount\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "H-Code Breakdown",
+      "type": "table"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  CASE \n    WHEN chargeback_cycle = 'direct' THEN 'Direct'\n    ELSE 'Allocated'\n  END as method,\n  COALESCE(SUM(usd_amount), 0) as total\nFROM chargeback_fact\nWHERE month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY CASE WHEN chargeback_cycle = 'direct' THEN 'Direct' ELSE 'Allocated' END\nORDER BY total DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Allocation Method Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Monthly Charge"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Monthly Charge"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(o.owner_name, 'Unknown') as \"Owner\",\n  COALESCE(o.organizational_hierarchy, 'Unknown') as \"Org Hierarchy\",\n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COUNT(DISTINCT a.app_id) as \"Applications\",\n  COALESCE(SUM(c.usd_amount), 0) as \"Monthly Charge\",\n  STRING_AGG(DISTINCT COALESCE(c.h_code, 'Unknown'), ', ') as \"H-Code\"\nFROM chargeback_fact c\nLEFT JOIN owners_dim o ON c.owner_id = o.owner_id\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nLEFT JOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY o.owner_name, o.organizational_hierarchy, s.sector_name\nORDER BY \"Monthly Charge\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Owner Chargeback Report",
+      "type": "table"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 6,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(a.appd_application_name, 'Unknown') as application,\n  COALESCE(SUM(c.usd_amount), 0) as amount\nFROM chargeback_fact c\nLEFT JOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_application_name\nORDER BY amount DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 20 Chargebacks by Amount",
+      "type": "barchart"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 36
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COUNT(*) as finalized_count\nFROM chargeback_fact\nWHERE is_finalized = true\n  AND month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "Finalized Chargebacks",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 36
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COUNT(*) as draft_count\nFROM chargeback_fact\nWHERE is_finalized = false\n  AND month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'",
+          "refId": "A"
+        }
+      ],
+      "title": "Draft Chargebacks",
+      "type": "stat"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "pepsico",
+    "appdynamics",
+    "chargeback",
+    "allocation"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PepsiCo AppDynamics - Allocation & Chargeback",
+  "uid": "pepsico-allocation-chargeback",
+  "version": 0,
+  "weekStart": ""
+}

@@ -40,6 +40,35 @@ def fetch_snow_table(table_name, fields, query=None):
         params['sysparm_offset'] += 1000
     return all_records
 
+#fetch_servers and fetch_relationships added by Claude 10/30/2025
+def fetch_servers(conn):
+    """Extract cmdb_ci_server for application-server relationships"""
+    servers = fetch_snow_table('cmdb_ci_server', 
+        ['sys_id', 'name', 'ip_address', 'os', 'virtual'],
+        query='operational_status=1')
+    
+# Insert into servers_dim table
+    cursor = conn.cursor()
+    for server in servers:
+        cursor.execute("""
+            INSERT INTO servers_dim (sn_sys_id, server_name, ip_address, os, is_virtual)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (sn_sys_id) DO UPDATE SET
+                server_name = EXCLUDED.server_name,
+                updated_at = NOW()
+        """, (server['sys_id'], server['name'], server.get('ip_address'), 
+              server.get('os'), server.get('virtual')))
+    conn.commit()
+
+# Map applications to servers - store in app_server_mapping table
+def fetch_relationships(conn):
+    """Extract cmdb_rel_ci for app-to-server mappings"""
+    relationships = fetch_snow_table('cmdb_rel_ci',
+        ['parent', 'child', 'type'],
+        query='type.name=Runs on::Runs')
+    
+
+
 def _upsert_dim(cursor, table_name, name_field, name_value):
     pk_map = {'owners_dim': 'owner_id', 'sectors_dim': 'sector_id', 
               'architecture_dim': 'architecture_id', 'capabilities_dim': 'capability_id'}
@@ -50,7 +79,125 @@ def _upsert_dim(cursor, table_name, name_field, name_value):
     cursor.execute(f"INSERT INTO {table_name} ({name_field}) VALUES (%s) RETURNING {pk}", (name_value,))
     return cursor.fetchone()[0]
 
+def _upsert_server(conn, server):
+    """Insert or update a server in servers_dim"""
+    cursor = conn.cursor()
+    sys_id = server.get('sys_id')
+    if not sys_id:
+        cursor.close()
+        return None
+    
+    try:
+        data = {
+            'server_name': server.get('name'),
+            'ip_address': server.get('ip_address'),
+            'os': server.get('os'),
+            'is_virtual': server.get('virtual', 'false').lower() == 'true'
+        }
+        
+        cursor.execute("SELECT server_id FROM servers_dim WHERE sn_sys_id = %s", (sys_id,))
+        
+        if cursor.fetchone():
+            set_clause = ', '.join([f"{k} = %s" for k in data.keys()])
+            cursor.execute(f"UPDATE servers_dim SET {set_clause}, updated_at = NOW() WHERE sn_sys_id = %s", 
+                          list(data.values()) + [sys_id])
+        else:
+            data['sn_sys_id'] = sys_id
+            fields = ', '.join(data.keys())
+            placeholders = ', '.join(['%s'] * len(data))
+            cursor.execute(f"INSERT INTO servers_dim ({fields}) VALUES ({placeholders}) RETURNING server_id", 
+                          list(data.values()))
+            server_id = cursor.fetchone()[0]
+            conn.commit()
+            cursor.close()
+            return server_id
+        
+        conn.commit()
+        cursor.execute("SELECT server_id FROM servers_dim WHERE sn_sys_id = %s", (sys_id,))
+        server_id = cursor.fetchone()[0]
+        cursor.close()
+        return server_id
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"ERROR upserting server {sys_id}: {e}")
+        cursor.close()
+        return None
 
+
+def fetch_and_load_servers(conn):
+    """Extract servers from ServiceNow and load into servers_dim"""
+    try:
+        print("Fetching servers from ServiceNow...")
+        servers = fetch_snow_table('cmdb_ci_server', 
+            ['sys_id', 'name', 'ip_address', 'os', 'virtual'],
+            query='operational_status=1')
+        
+        print(f"Retrieved {len(servers)} servers")
+        success = 0
+        
+        for server in servers:
+            if _upsert_server(conn, server):
+                success += 1
+        
+        print(f"✅ Loaded {success}/{len(servers)} servers")
+        return success
+        
+    except Exception as e:
+        print(f"ERROR fetching servers: {e}")
+        return 0
+
+
+def fetch_and_map_relationships(conn):
+    """Extract app-to-server relationships and populate app_server_mapping"""
+    try:
+        print("Fetching application-server relationships...")
+        relationships = fetch_snow_table('cmdb_rel_ci',
+            ['parent', 'child', 'type'],
+            query='type.name=Runs on::Runs')
+        
+        print(f"Retrieved {len(relationships)} relationships")
+        
+        cursor = conn.cursor()
+        success = 0
+        
+        for rel in relationships:
+            parent_sys_id = rel.get('parent', {}).get('value') if isinstance(rel.get('parent'), dict) else rel.get('parent')
+            child_sys_id = rel.get('child', {}).get('value') if isinstance(rel.get('child'), dict) else rel.get('child')
+            
+            if not parent_sys_id or not child_sys_id:
+                continue
+            
+            # Get app_id from applications_dim (parent is the application)
+            cursor.execute("SELECT app_id FROM applications_dim WHERE sn_sys_id = %s", (parent_sys_id,))
+            app_result = cursor.fetchone()
+            
+            # Get server_id from servers_dim (child is the server)
+            cursor.execute("SELECT server_id FROM servers_dim WHERE sn_sys_id = %s", (child_sys_id,))
+            server_result = cursor.fetchone()
+            
+            if app_result and server_result:
+                app_id = app_result[0]
+                server_id = server_result[0]
+                
+                cursor.execute("""
+                    INSERT INTO app_server_mapping (app_id, server_id, relationship_type)
+                    VALUES (%s, %s, 'Runs on')
+                    ON CONFLICT (app_id, server_id) DO NOTHING
+                """, (app_id, server_id))
+                success += 1
+        
+        conn.commit()
+        cursor.close()
+        
+        print(f"✅ Mapped {success} application-server relationships")
+        return success
+        
+    except Exception as e:
+        print(f"ERROR mapping relationships: {e}")
+        conn.rollback()
+        return 0
+    
 def upsert_application(conn, svc):
     cursor = conn.cursor()
     sys_id = svc.get('sys_id')
@@ -97,18 +244,43 @@ def upsert_application(conn, svc):
 
 def run_snow_etl():
     try:
+        print("=" * 60)
         print("ServiceNow ETL Starting")
+        print("=" * 60)
+        
         conn = connect_db()
+        
+        # Step 1: Load applications
         services = fetch_snow_table('cmdb_ci_service', 
             ['sys_id','name','owned_by','managed_by','u_sector','business_unit',
              'u_architecture_type','u_h_code','cost_center','support_group'], 
-            'install_status=1^operational_status=1')
+            query='install_status=1^operational_status=1')
         print(f"Retrieved {len(services)} services")
+        
         success = sum(1 for s in services if upsert_application(conn, s))
-        print(f"✅ Success: {success}/{len(services)}")
+        print(f"✅ Applications: {success}/{len(services)}")
+        
+        # Step 2: Load servers
+        servers_loaded = fetch_and_load_servers(conn)
+        
+        # Step 3: Map relationships
+        relationships_mapped = fetch_and_map_relationships(conn)
+        
+        print("=" * 60)
+        print(f"✅ ServiceNow ETL Complete")
+        print(f"   • Applications: {success}")
+        print(f"   • Servers: {servers_loaded}")
+        print(f"   • Relationships: {relationships_mapped}")
+        print("=" * 60)
+        
     except Exception as e:
+        print("=" * 60)
         print(f"❌ FATAL: {e}")
+        print("=" * 60)
+        import traceback
+        traceback.print_exc()
     finally:
-        if conn: conn.close()
+        if conn: 
+            conn.close()
 
 if __name__ == '__main__': run_snow_etl()

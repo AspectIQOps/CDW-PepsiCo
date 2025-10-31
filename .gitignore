@@ -17,4 +17,7 @@ __pycache__/
 venv/
 
 #Temp Documentation
-docs/
+#docs/
+
+#old stuff
+OLD/

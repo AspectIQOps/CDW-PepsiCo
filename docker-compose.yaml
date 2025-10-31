@@ -13,9 +13,10 @@ services:
       - TZ=America/New_York
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # SQL scripts run in alphabetical order (01_create_tables, 02_seed_dimensions, 03_seed_tables)
+      # SQL scripts run in alpha-numeric order (01_schema, 02_seed_dimensions)
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     ports:
+      # PHASE 2: Exposed for Cloudflare Tunnel / Grafana Cloud access
       - "5432:5432"
     networks:
       - pepsico-network
@@ -26,51 +27,16 @@ services:
       retries: 5
 
   # ==========================================================
-  # Grafana Visualization Service
-  # ==========================================================
-  grafana:
-    image: grafana/grafana:12.2.1
-    container_name: pepsico-grafana
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SERVER_ROOT_URL=http://localhost:3000
-      - TZ=America/New_York
-    volumes:
-      - grafana_data:/var/lib/grafana
-      # --- START OF FIX ---
-      # 1. Mount datasources YAML
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      # 2. Mount dashboard provisioning YAML (dashboard.yml)
-      # Assuming dashboard.yml is in your local ./config/grafana/provisioning
-      - ./config/grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
-      # 3. CRITICAL FIX: Mount local dashboard JSON files to the path specified in dashboard.yml
-      # This resolves the "no such file or directory" error for /var/lib/grafana/dashboards
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - "3000:3000"
-    networks:
-      - pepsico-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  # ==========================================================
   # ETL Services (AppDynamics & ServiceNow)
   # ==========================================================
+  # Individual ETL Services - For testing/debugging specific components
   etl_appd:
     build:
       context: .
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-appd
     restart: "no"
-    command: ["/app/entrypoint.sh", "python", "scripts/etl/appd_etl.py"]
+    command: ["python3", "/app/scripts/etl/appd_etl.py"]
     env_file: .env
     environment:
       - DB_HOST=postgres
@@ -79,8 +45,7 @@ services:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
       - etl_logs:/var/log/etl
-      # CRITICAL: Mount local AWS credentials for SSM access
-      - ~/.aws:/root/.aws:ro 
+      - ~/.aws:/root/.aws:ro
     networks:
       - pepsico-network
     depends_on:
@@ -93,7 +58,7 @@ services:
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-snow
     restart: "no"
-    command: ["/app/entrypoint.sh", "python", "scripts/etl/snow_etl.py"]
+    command: ["python3", "/app/scripts/etl/snow_etl.py"]
     env_file: .env
     environment:
       - DB_HOST=postgres
@@ -102,8 +67,47 @@ services:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
       - etl_logs:/var/log/etl
-      # CRITICAL: Mount local AWS credentials for SSM access
       - ~/.aws:/root/.aws:ro
+    networks:
+      - pepsico-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Unified ETL Service - Runs complete pipeline via entrypoint.sh
+  etl:
+    build:
+      context: .
+      dockerfile: docker/etl/Dockerfile
+    container_name: pepsico-etl-unified
+    restart: "no"
+    command: ["./entrypoint.sh"]
+    env_file: .env
+    environment:
+      - DB_HOST=postgres
+      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./docker/etl:/app/docker/etl:ro
+      - ./sql:/app/sql:ro
+      - etl_logs:/var/log/etl
+      - ~/.aws:/root/.aws:ro
+    networks:
+      - pepsico-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================
+  # PostgreSQL Exporter for Prometheus Metrics
+  # ==========================================================
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: pepsico-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://appd_ro:appd_pass@postgres:5432/appd_licensing?sslmode=disable"
+    ports:
+      - "9187:9187"
     networks:
       - pepsico-network
     depends_on:
@@ -113,8 +117,6 @@ services:
 volumes:
   postgres_data:
     name: pepsico_postgres_data
-  grafana_data:
-    name: pepsico_grafana_data
   etl_logs:
     name: pepsico_etl_logs
 

@@ -21,6 +21,9 @@ DROP TABLE IF EXISTS sectors_dim CASCADE;
 DROP TABLE IF EXISTS capabilities_dim CASCADE;
 DROP TABLE IF EXISTS owners_dim CASCADE;
 DROP TABLE IF EXISTS etl_execution_log CASCADE;
+DROP TABLE IF EXISTS app_server_mapping CASCADE;
+DROP TABLE IF EXISTS servers_dim CASCADE;
+DROP TABLE IF EXISTS forecast_models CASCADE;
 
 DROP VIEW IF EXISTS app_cross_reference_v CASCADE;
 DROP VIEW IF EXISTS app_license_summary_v CASCADE;
@@ -116,6 +119,33 @@ CREATE INDEX idx_applications_h_code ON applications_dim(h_code);
 CREATE INDEX idx_applications_owner_id ON applications_dim(owner_id);
 CREATE INDEX idx_applications_sector_id ON applications_dim(sector_id);
 COMMENT ON TABLE applications_dim IS 'Master application registry linking AppDynamics and ServiceNow';
+
+-- Servers Dimension (for ServiceNow cmdb_ci_server)
+CREATE TABLE servers_dim (
+    server_id SERIAL PRIMARY KEY,
+    sn_sys_id TEXT UNIQUE NOT NULL,
+    server_name TEXT,
+    ip_address TEXT,
+    os TEXT,
+    is_virtual BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_servers_sn_sys_id ON servers_dim(sn_sys_id);
+COMMENT ON TABLE servers_dim IS 'Server configuration items from ServiceNow CMDB';
+
+-- Application-Server Mapping (for ServiceNow cmdb_rel_ci)
+CREATE TABLE app_server_mapping (
+    mapping_id SERIAL PRIMARY KEY,
+    app_id INT NOT NULL REFERENCES applications_dim(app_id),
+    server_id INT NOT NULL REFERENCES servers_dim(server_id),
+    relationship_type TEXT DEFAULT 'Runs on',
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(app_id, server_id)
+);
+CREATE INDEX idx_app_server_app_id ON app_server_mapping(app_id);
+CREATE INDEX idx_app_server_server_id ON app_server_mapping(server_id);
+COMMENT ON TABLE app_server_mapping IS 'Application to server relationships from ServiceNow';
 
 -- ============================================================
 -- CONFIGURATION TABLES
@@ -213,6 +243,8 @@ CREATE TABLE forecast_fact (
     method TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
+-- Add unique constraint for ON CONFLICT in advanced_forecasting.py
+CREATE UNIQUE INDEX idx_forecast_fact_unique ON forecast_fact(month_start, app_id, capability_id, tier);
 CREATE INDEX idx_forecast_month ON forecast_fact(month_start);
 CREATE INDEX idx_forecast_app ON forecast_fact(app_id);
 COMMENT ON TABLE forecast_fact IS '12-24 month license usage projections';
@@ -230,6 +262,7 @@ CREATE TABLE chargeback_fact (
     is_finalized BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
 );
+CREATE UNIQUE INDEX idx_chargeback_fact_unique ON chargeback_fact(month_start, app_id, sector_id);
 CREATE INDEX idx_chargeback_month ON chargeback_fact(month_start);
 CREATE INDEX idx_chargeback_sector ON chargeback_fact(sector_id);
 CREATE INDEX idx_chargeback_hcode ON chargeback_fact(h_code);
@@ -296,6 +329,18 @@ CREATE TABLE user_actions (
 CREATE INDEX idx_user_actions_ts ON user_actions(action_ts DESC);
 COMMENT ON TABLE user_actions IS 'Audit log of user administrative actions';
 
+-- Forecast Models (Algorithm configurations)
+CREATE TABLE forecast_models (
+    model_id SERIAL PRIMARY KEY,
+    model_name TEXT NOT NULL UNIQUE,
+    algorithm TEXT NOT NULL,
+    parameters JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+COMMENT ON TABLE forecast_models IS 'Forecasting algorithm configurations and parameters';
+
 -- ============================================================
 -- VIEWS FOR GRAFANA DASHBOARDS
 -- ============================================================
@@ -351,6 +396,55 @@ GROUP BY ad.app_id, ad.appd_application_name, ad.sn_service_name,
          o.owner_name, s.sector_name, ar.pattern_name, ad.h_code;
 
 COMMENT ON VIEW app_license_summary_v IS 'Current month license summary by application';
+
+-- Peak vs Pro Savings Analysis View
+CREATE VIEW peak_vs_pro_savings_v AS
+SELECT 
+    ad.app_id,
+    COALESCE(ad.appd_application_name, ad.sn_service_name) as application_name,
+    s.sector_name,
+    cd.capability_code,
+    SUM(CASE WHEN luf.tier = 'PEAK' THEN luf.units_consumed ELSE 0 END) as peak_units,
+    SUM(CASE WHEN luf.tier = 'PRO' THEN luf.units_consumed ELSE 0 END) as pro_units,
+    SUM(CASE WHEN luf.tier = 'PEAK' THEN lcf.usd_cost ELSE 0 END) as peak_cost,
+    SUM(CASE WHEN luf.tier = 'PRO' THEN lcf.usd_cost ELSE 0 END) as pro_cost,
+    -- Potential savings if all PEAK moved to PRO
+    SUM(CASE WHEN luf.tier = 'PEAK' THEN lcf.usd_cost ELSE 0 END) * 0.33 as potential_savings
+FROM license_usage_fact luf
+JOIN applications_dim ad ON ad.app_id = luf.app_id
+JOIN sectors_dim s ON s.sector_id = ad.sector_id
+JOIN capabilities_dim cd ON cd.capability_id = luf.capability_id
+LEFT JOIN license_cost_fact lcf ON lcf.app_id = luf.app_id 
+    AND lcf.ts = luf.ts 
+    AND lcf.capability_id = luf.capability_id
+    AND lcf.tier = luf.tier
+WHERE luf.ts >= DATE_TRUNC('month', NOW()) - INTERVAL '3 months'
+GROUP BY ad.app_id, ad.appd_application_name, ad.sn_service_name, 
+         s.sector_name, cd.capability_code;
+
+COMMENT ON VIEW peak_vs_pro_savings_v IS 'Tier analysis with savings potential calculation';
+
+-- Architecture Efficiency View
+CREATE VIEW architecture_efficiency_v AS
+SELECT 
+    ar.pattern_name as architecture,
+    COUNT(DISTINCT ad.app_id) as app_count,
+    AVG(luf.units_consumed) as avg_daily_units,
+    AVG(luf.nodes_count) as avg_nodes,
+    AVG(luf.units_consumed) / NULLIF(AVG(luf.nodes_count), 0) as efficiency_ratio,
+    SUM(lcf.usd_cost) as total_cost,
+    SUM(lcf.usd_cost) / NULLIF(COUNT(DISTINCT ad.app_id), 0) as cost_per_app
+FROM applications_dim ad
+JOIN architecture_dim ar ON ar.architecture_id = ad.architecture_id
+LEFT JOIN license_usage_fact luf ON luf.app_id = ad.app_id
+    AND luf.ts >= DATE_TRUNC('month', NOW())
+LEFT JOIN license_cost_fact lcf ON lcf.app_id = luf.app_id
+    AND lcf.ts = luf.ts
+    AND lcf.capability_id = luf.capability_id
+    AND lcf.tier = luf.tier
+GROUP BY ar.pattern_name;
+
+COMMENT ON VIEW architecture_efficiency_v IS 'License efficiency metrics by architecture pattern';
 
 -- ============================================================
 -- PERMISSIONS
