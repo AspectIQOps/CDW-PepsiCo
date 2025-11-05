@@ -485,6 +485,44 @@ END
 $$;
 
 -- ============================================================
+-- GRAFANA CLOUD READ-ONLY USER
+-- ============================================================
+
+-- Create grafana user with read-only access
+DO $$
+BEGIN
+    -- Check if user exists first (idempotent)
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'grafana_ro') THEN
+        CREATE USER grafana_ro WITH PASSWORD '${GRAFANA_DB_PASSWORD}';
+    END IF;
+END
+$$;
+
+-- Grant connection rights
+GRANT CONNECT ON DATABASE appd_licensing TO grafana_ro;
+GRANT USAGE ON SCHEMA public TO grafana_ro;
+
+-- Grant SELECT on all existing tables
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_ro;
+
+-- Grant SELECT on all existing views (including materialized views)
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO grafana_ro;
+
+-- Ensure future tables/views are also readable
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO grafana_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO grafana_ro;
+
+-- Verify permissions
+DO $$
+BEGIN
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE 'Grafana Read-Only User Created: grafana_ro';
+    RAISE NOTICE 'Password: Set via environment variable';
+    RAISE NOTICE 'Permissions: SELECT on all tables/views';
+    RAISE NOTICE '==============================================';
+END $$;
+
+-- ============================================================
 -- VERIFICATION
 -- ============================================================
 

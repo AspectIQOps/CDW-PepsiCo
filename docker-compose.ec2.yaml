@@ -1,0 +1,24 @@
+services:
+  etl:
+    build:
+      context: .
+      dockerfile: docker/etl/Dockerfile
+    container_name: pepsico-etl-unified
+    restart: "no"
+    env_file: .env.ec2
+    environment:
+      - DB_HOST=${RDS_ENDPOINT}
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-appd_licensing}
+      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
+      - AWS_REGION=${AWS_REGION:-us-east-2}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-2}
+    
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./sql:/app/sql:ro
+      - etl_logs:/var/log/etl
+
+volumes:
+  etl_logs:
+    name: pepsico_etl_logs

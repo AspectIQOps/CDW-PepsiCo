@@ -251,6 +251,7 @@ def run_snow_etl():
         conn = connect_db()
         
         # Step 1: Load applications
+        print("\n[1/3] Loading applications from cmdb_ci_service...")
         services = fetch_snow_table('cmdb_ci_service', 
             ['sys_id','name','owned_by','managed_by','u_sector','business_unit',
              'u_architecture_type','u_h_code','cost_center','support_group'], 
@@ -260,10 +261,12 @@ def run_snow_etl():
         success = sum(1 for s in services if upsert_application(conn, s))
         print(f"✅ Applications: {success}/{len(services)}")
         
-        # Step 2: Load servers
+        # Step 2: Load servers from cmdb_ci_server
+        print("\n[2/3] Loading servers from cmdb_ci_server...")
         servers_loaded = fetch_and_load_servers(conn)
         
-        # Step 3: Map relationships
+        # Step 3: Map application-server relationships from cmdb_rel_ci
+        print("\n[3/3] Mapping application-server relationships...")
         relationships_mapped = fetch_and_map_relationships(conn)
         
         print("=" * 60)
@@ -283,4 +286,5 @@ def run_snow_etl():
         if conn: 
             conn.close()
 
-if __name__ == '__main__': run_snow_etl()
+if __name__ == '__main__': 
+    run_snow_etl()
