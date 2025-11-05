@@ -31,9 +31,11 @@ $$;
 GRANT CONNECT ON DATABASE testdb TO appd_ro;
 GRANT CONNECT ON DATABASE testdb TO grafana_ro;
 
-RAISE NOTICE '============================================';
-RAISE NOTICE 'User creation complete';
-RAISE NOTICE '============================================';
-EOF
-
-echo "✅ Created 00_create_users.sql"
+-- Final status message
+DO $$
+BEGIN
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'User creation complete';
+    RAISE NOTICE '============================================';
+END
+$$;
