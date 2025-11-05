@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 cd ~/CDW-PepsiCo
 
 # Fetch credentials from SSM
@@ -5,41 +8,31 @@ DB_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/DB_PASSWORD" --with-d
 GRAFANA_DB_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/GRAFANA_DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
 POSTGRES_MASTER_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/POSTGRES_MASTER_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
 
-# Export for psql
-export PGPASSWORD="$POSTGRES_PASSWORD"
+# Export for psql (FIX: was POSTGRES_PASSWORD, should be POSTGRES_MASTER_PASSWORD)
+export PGPASSWORD="$POSTGRES_MASTER_PASSWORD"
+
+# Enable SSL for RDS
+export PGSSLMODE=require
+
+# Connection parameters
+PSQL_OPTS="-h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U postgres -d testdb -v ON_ERROR_STOP=1"
 
 # Run initialization scripts in order
 echo "📝 Running 00_create_users.sql..."
 DB_PASSWORD="$DB_PASSWORD" GRAFANA_DB_PASSWORD="$GRAFANA_DB_PASSWORD" \
-envsubst < sql/init/00_create_users.sql | \
-psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com \
-     -U postgres \
-     -d testdb \
-     -v ON_ERROR_STOP=1
+envsubst < sql/init/00_create_users.sql | psql $PSQL_OPTS
 
 echo ""
 echo "📝 Running 01_schema.sql..."
-psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com \
-     -U postgres \
-     -d testdb \
-     -v ON_ERROR_STOP=1 \
-     -f sql/init/01_schema.sql
+psql $PSQL_OPTS -f sql/init/01_schema.sql
 
 echo ""
 echo "📝 Running 02_seed_dimensions.sql..."
-psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com \
-     -U postgres \
-     -d testdb \
-     -v ON_ERROR_STOP=1 \
-     -f sql/init/02_seed_dimensions.sql
+psql $PSQL_OPTS -f sql/init/02_seed_dimensions.sql
 
 echo ""
 echo "📝 Running 03_materialized_views.sql..."
-psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com \
-     -U postgres \
-     -d testdb \
-     -v ON_ERROR_STOP=1 \
-     -f sql/init/03_materialized_views.sql
+psql $PSQL_OPTS -f sql/init/03_materialized_views.sql
 
 echo ""
 echo "✅ Database initialization complete!"
