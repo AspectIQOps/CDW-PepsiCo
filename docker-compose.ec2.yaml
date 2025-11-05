@@ -5,14 +5,12 @@ services:
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-unified
     restart: "no"
-    env_file: .env.ec2
+    command: ["./entrypoint.sh"]
     environment:
-      - DB_HOST=${RDS_ENDPOINT}
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-appd_licensing}
-      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
-      - AWS_REGION=${AWS_REGION:-us-east-2}
-      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-2}
+      - DB_HOST=grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com
+      - SSM_PATH=/aspectiq/demo
+      - AWS_REGION=us-east-2
+      - AWS_DEFAULT_REGION=us-east-2
     
     volumes:
       - ./scripts:/app/scripts:ro
