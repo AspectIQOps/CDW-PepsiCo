@@ -12,12 +12,31 @@ __pycache__/
 
 # Logs
 *.log
+logs/
 
 # Virtual environment
 venv/
+.venv/
+env/
+ENV/
+
+# Database dumps
+*.sql.gz
+*.dump
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 #Temp Documentation
 #docs/
 
 #old stuff
 OLD/
+Archive/
+*.backup
+*.ori
+*.copy
+
