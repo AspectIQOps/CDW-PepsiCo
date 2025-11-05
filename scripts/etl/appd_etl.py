@@ -17,8 +17,8 @@ DB_NAME = os.getenv('DB_NAME', 'appd_licensing')
 DB_USER = os.getenv('DB_USER', 'appd_ro')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
 
-MOCK_START = datetime(2025, 7, 30)
-MOCK_END = datetime(2025, 10, 28)
+MOCK_END = datetime.now()
+MOCK_START = MOCK_END - timedelta(days=90)
 
 # UPDATED: Apps that will match ServiceNow data with high confidence
 APPS = [
