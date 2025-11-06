@@ -1,37 +1,38 @@
 #!/bin/bash
 # ==========================================================
-# 🧹 CDW-PepsiCo Docker Stack Teardown
-# Stops and removes containers, with optional volume cleanup.
-
-# Usage
-# Default (preserve PostgreSQL + Grafana data):
-# ./scripts/teardown_docker_stack.sh
-
-# Full reset (wipe everything):
-# ./scripts/teardown_docker_stack.sh --full
+# Docker Stack Teardown for EC2/RDS Environment
+# Stops and removes containers, with optional volume cleanup
 # ==========================================================
 
 set -euo pipefail
 
 echo "=============================="
-echo "🧹 CDW-PepsiCo Docker Stack Teardown"
+echo "🧹 Docker Stack Teardown"
 echo "=============================="
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$REPO_ROOT/docker-compose.yaml"
-ENV_FILE="$REPO_ROOT/.env"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
 
-[[ -f "$COMPOSE_FILE" ]] || { echo "❌ Missing docker-compose.yaml"; exit 1; }
+COMPOSE_FILE="docker-compose.ec2.yaml"
+
+# Check if compose file exists
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "❌ Error: $COMPOSE_FILE not found"
+    exit 1
+fi
 
 # Stop and remove containers
-echo "🛑 Stopping and removing containers..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans
+echo "🛑 Stopping containers..."
+docker compose -f "$COMPOSE_FILE" down --remove-orphans
 
-# Optional volume removal
+# Optional: Remove volumes
 if [[ "${1:-}" == "--full" ]]; then
-  echo "⚠️  Full cleanup: removing named volumes including PostgreSQL data."
-  docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+    echo "⚠️  Removing volumes..."
+    docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+    echo "✅ Full cleanup complete (volumes removed)"
 else
-  echo "✅ Stack removed (volumes preserved)."
-  echo "Run with '--full' to remove all volumes (including data)."
+    echo "✅ Containers stopped (volumes preserved)"
+    echo "   Use '--full' to remove volumes"
 fi
+
+echo "=============================="
