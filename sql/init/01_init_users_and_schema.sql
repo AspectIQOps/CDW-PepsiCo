@@ -162,4 +162,8 @@ SELECT tool_name, is_active, last_successful_run
 FROM tool_configurations
 ORDER BY tool_name;
 
-RAISE NOTICE 'Database initialization complete!';
+DO $$
+BEGIN
+    RAISE NOTICE 'Database initialization complete!';
+END
+$$;
