@@ -1,3 +1,4 @@
+cat > sql/init/01_init_users_and_schema.sql << 'EOF'
 -- ========================================
 -- Analytics Platform - Database Initialization
 -- ========================================
@@ -24,7 +25,7 @@
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'etl_analytics') THEN
-        CREATE USER etl_analytics WITH PASSWORD 'CHANGE_ME_IN_PRODUCTION';
+        CREATE USER etl_analytics WITH PASSWORD '${DB_PASSWORD}';
         RAISE NOTICE 'Created user: etl_analytics';
     ELSE
         RAISE NOTICE 'User etl_analytics already exists';
@@ -36,7 +37,7 @@ $$;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'grafana_ro') THEN
-        CREATE USER grafana_ro WITH PASSWORD 'CHANGE_ME_IN_PRODUCTION';
+        CREATE USER grafana_ro WITH PASSWORD '${GRAFANA_DB_PASSWORD}';
         RAISE NOTICE 'Created user: grafana_ro';
     ELSE
         RAISE NOTICE 'User grafana_ro already exists';
@@ -85,17 +86,19 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For fuzzy text matching
 
 CREATE TABLE IF NOT EXISTS audit_etl_runs (
     run_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tool_name VARCHAR(50) NOT NULL,  -- 'appdynamics', 'servicenow', 'elastic', etc.
-    pipeline_stage VARCHAR(50) NOT NULL,  -- 'extract', 'transform', 'load'
+    tool_name VARCHAR(50) NOT NULL,
+    pipeline_stage VARCHAR(50) NOT NULL,
     start_time TIMESTAMP NOT NULL DEFAULT NOW(),
     end_time TIMESTAMP,
-    status VARCHAR(20) NOT NULL,  -- 'running', 'success', 'failed'
+    status VARCHAR(20) NOT NULL,
     records_processed INTEGER,
     error_message TEXT,
-    metadata JSONB,  -- Store tool-specific details
+    metadata JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+DROP INDEX IF EXISTS idx_audit_tool_time;
+DROP INDEX IF EXISTS idx_audit_status;
 CREATE INDEX idx_audit_tool_time ON audit_etl_runs(tool_name, start_time DESC);
 CREATE INDEX idx_audit_status ON audit_etl_runs(status);
 
@@ -109,10 +112,10 @@ GRANT SELECT ON audit_etl_runs TO grafana_ro;
 
 CREATE TABLE IF NOT EXISTS tool_configurations (
     tool_id SERIAL PRIMARY KEY,
-    tool_name VARCHAR(50) UNIQUE NOT NULL,  -- 'appdynamics', 'servicenow', etc.
+    tool_name VARCHAR(50) UNIQUE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     last_successful_run TIMESTAMP,
-    configuration JSONB,  -- Tool-specific config
+    configuration JSONB,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -144,6 +147,14 @@ COMMENT ON COLUMN audit_etl_runs.metadata IS 'Tool-specific execution details st
 -- ========================================
 
 -- List all users
+DO $$
+BEGIN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Database initialization complete!';
+    RAISE NOTICE '========================================';
+END
+$$;
+
 SELECT usename, usesuper, usecreatedb 
 FROM pg_user 
 WHERE usename IN ('etl_analytics', 'grafana_ro')
@@ -161,9 +172,4 @@ ORDER BY grantee, privilege_type;
 SELECT tool_name, is_active, last_successful_run
 FROM tool_configurations
 ORDER BY tool_name;
-
-DO $$
-BEGIN
-    RAISE NOTICE 'Database initialization complete!';
-END
-$$;
+EOF
