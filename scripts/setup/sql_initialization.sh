@@ -6,33 +6,24 @@ cd ~/CDW-PepsiCo
 # Fetch credentials from SSM
 DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
 GRAFANA_DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/GRAFANA_DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
-POSTGRES_MASTER_PASSWORD=$(aws ssm get-parameter --name "/pepsico/POSTGRES_MASTER_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
+POSTGRES_MASTER_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_ADMIN_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
 
-# Export for psql (FIX: was POSTGRES_PASSWORD, should be POSTGRES_MASTER_PASSWORD)
+# Export for psql
 export PGPASSWORD="$POSTGRES_MASTER_PASSWORD"
 
 # Enable SSL for RDS
 export PGSSLMODE=require
 
+# Get RDS endpoint from SSM or use default
+RDS_ENDPOINT=${RDS_ENDPOINT:-$(aws ssm get-parameter --name "/pepsico/DB_HOST" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "pepsico-analytics-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com")}
+
 # Connection parameters
-PSQL_OPTS="-h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U postgres -d cost_analytics_db -v ON_ERROR_STOP=1"
+PSQL_OPTS="-h $RDS_ENDPOINT -U postgres -d cost_analytics_db -v ON_ERROR_STOP=1"
 
-# Run initialization scripts in order
-echo "📝 Running 00_create_users.sql..."
+# Run initialization script
+echo "📝 Running 01_init_users_and_schema.sql..."
 DB_PASSWORD="$DB_PASSWORD" GRAFANA_DB_PASSWORD="$GRAFANA_DB_PASSWORD" \
-envsubst < sql/init/00_create_users.sql | psql $PSQL_OPTS
-
-echo ""
-echo "📝 Running 01_schema.sql..."
-psql $PSQL_OPTS -f sql/init/01_schema.sql
-
-echo ""
-echo "📝 Running 02_seed_dimensions.sql..."
-psql $PSQL_OPTS -f sql/init/02_seed_dimensions.sql
-
-echo ""
-echo "📝 Running 03_materialized_views.sql..."
-psql $PSQL_OPTS -f sql/init/03_materialized_views.sql
+envsubst < sql/init/01_init_users_and_schema.sql | psql $PSQL_OPTS
 
 echo ""
 echo "✅ Database initialization complete!"

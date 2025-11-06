@@ -83,9 +83,9 @@ echo ""
 DB_HOST=$(prompt_value "RDS Endpoint" "your-db.us-east-2.rds.amazonaws.com")
 DB_NAME=$(prompt_value "Database Name" "cost_analytics_db")
 DB_USER=$(prompt_value "ETL User" "etl_analytics")
-DB_PASSWORD=$(prompt_value "ETL User Password" "" "true")
-DB_ADMIN_PASSWORD=$(prompt_value "Master Password" "" "true")
-GRAFANA_PASSWORD=$(prompt_value "Grafana RO Password" "" "true")
+DB_PASSWORD=$(prompt_value "ETL User Password" "etl_user_password")
+DB_ADMIN_PASSWORD=$(prompt_value "Master Password" "postgrespassword")
+GRAFANA_PASSWORD=$(prompt_value "Grafana RO Password" "grafanapassword")
 
 echo ""
 echo -e "${YELLOW}Creating database parameters...${NC}"
@@ -109,10 +109,10 @@ read -p "Configure AppDynamics? (y/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    APPD_CONTROLLER=$(prompt_value "Controller URL" "your-account.saas.appdynamics.com")
-    APPD_ACCOUNT=$(prompt_value "Account Name" "your-account")
-    APPD_CLIENT_ID=$(prompt_value "Client ID" "")
-    APPD_CLIENT_SECRET=$(prompt_value "Client Secret" "" "true")
+    APPD_CONTROLLER=$(prompt_value "Controller URL" "data202509290657533.saas.appdynamics.com")
+    APPD_ACCOUNT=$(prompt_value "Account Name" "data202509290657533")
+    APPD_CLIENT_ID=$(prompt_value "Client ID" "appd_etl")
+    APPD_CLIENT_SECRET=$(prompt_value "Client Secret" "20eb4005-c467-448b-9c16-64c191a34681")
     
     echo ""
     echo -e "${YELLOW}Creating AppDynamics parameters...${NC}"
@@ -135,9 +135,9 @@ read -p "Configure ServiceNow? (y/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    SN_INSTANCE=$(prompt_value "Instance URL" "dev12345.service-now.com")
-    SN_USER=$(prompt_value "Username" "")
-    SN_PASS=$(prompt_value "Password" "" "true")
+    SN_INSTANCE=$(prompt_value "Instance URL" "dev295015")
+    SN_USER=$(prompt_value "Username" "snow_etl")
+    SN_PASS=$(prompt_value "Password" "AspectIQ1!")
     
     echo ""
     echo -e "${YELLOW}Creating ServiceNow parameters...${NC}"

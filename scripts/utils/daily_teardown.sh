@@ -1,8 +1,5 @@
 #!/bin/bash
-# ==========================================================
 # Daily Teardown - Clean Shutdown
-# Stops containers and displays final statistics
-# ==========================================================
 
 set -e
 
@@ -24,12 +21,13 @@ echo "📊 Final data summary:"
 # Check if psql is available
 if command -v psql &> /dev/null; then
     # Try to get database stats
+    DB_HOST=$(aws ssm get-parameter --name "/pepsico/DB_HOST" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "pepsico-analytics-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com")
     DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null)
     
     if [ -n "$DB_PASSWORD" ]; then
         PGPASSWORD="$DB_PASSWORD" \
         PGSSLMODE=require \
-        psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U etl_analytics -d cost_analytics_db -c "
+        psql -h "$DB_HOST" -U etl_analytics -d cost_analytics_db -c "
         SELECT 'Applications' as metric, COUNT(*)::text as count FROM applications_dim
         UNION ALL
         SELECT 'Usage Records', COUNT(*)::text FROM license_usage_fact
@@ -49,8 +47,7 @@ echo ""
 echo "✅ Environment cleaned and ready for AWS resource termination"
 echo ""
 echo "Next steps:"
-echo "  • Terminate RDS instance via AWS Console"
-echo "  • Terminate EC2 instance via AWS Console"
-echo "  • Review CloudWatch logs if needed"
+echo "  • Terminate RDS: aws rds delete-db-instance --db-instance-identifier pepsico-analytics-db --skip-final-snapshot --region us-east-2"
+echo "  • Terminate EC2: aws ec2 terminate-instances --instance-ids <INSTANCE_ID> --region us-east-2"
 echo ""
 echo "=========================================="
