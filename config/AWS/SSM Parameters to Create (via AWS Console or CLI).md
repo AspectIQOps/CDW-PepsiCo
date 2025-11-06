@@ -3,7 +3,7 @@ aws ssm put-parameter --name "/pepsico/appdynamics/prod/DB_NAME" \
   --value "appd_licensing" --type String
 
 aws ssm put-parameter --name "/pepsico/appdynamics/prod/DB_USER" \
-  --value "appd_ro" --type String
+  --value "etl_analytics" --type String
 
 aws ssm put-parameter --name "/pepsico/appdynamics/prod/DB_PASSWORD" \
   --value "your_secure_password" --type SecureString

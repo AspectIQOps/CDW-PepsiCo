@@ -771,7 +771,7 @@ support_group             → support_group
 - Role mapping: AD groups → Grafana roles
 
 **Database Access:**
-- PostgreSQL user: `appd_ro` (read-write access to appd_licensing schema)
+- PostgreSQL user: `etl_analytics` (read-write access to appd_licensing schema)
 - Password rotation: 90 days (recommended)
 - Connection limit: 100 concurrent connections
 - SSL/TLS encryption (production)
@@ -938,7 +938,7 @@ GROUP BY ad.app_id, ...;
 
 **Backup Command:**
 ```bash
-pg_dump -U appd_ro -h postgres -d appd_licensing \
+pg_dump -U etl_analytics -h postgres -d appd_licensing \
   --format=custom --compress=9 \
   --file=/backup/appd_licensing_$(date +%Y%m%d).dump
 ```
@@ -1246,13 +1246,13 @@ services:
     image: postgres:16
     environment:
       POSTGRES_DB: appd_licensing
-      POSTGRES_USER: appd_ro
+      POSTGRES_USER: etl_analytics
       POSTGRES_PASSWORD: appd_pass
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "appd_ro"]
+      test: ["CMD", "pg_isready", "-U", "etl_analytics"]
       interval: 5s
       timeout: 5s
       retries: 5

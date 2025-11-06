@@ -4,9 +4,9 @@ set -e
 cd ~/CDW-PepsiCo
 
 # Fetch credentials from SSM
-DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
-GRAFANA_DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/GRAFANA_DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
-POSTGRES_MASTER_PASSWORD=$(aws ssm get-parameter --name "/pepsico/POSTGRES_MASTER_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
+DB_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
+GRAFANA_DB_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/GRAFANA_DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
+POSTGRES_MASTER_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/POSTGRES_MASTER_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text)
 
 # Export for psql (FIX: was POSTGRES_PASSWORD, should be POSTGRES_MASTER_PASSWORD)
 export PGPASSWORD="$POSTGRES_MASTER_PASSWORD"
@@ -15,7 +15,7 @@ export PGPASSWORD="$POSTGRES_MASTER_PASSWORD"
 export PGSSLMODE=require
 
 # Connection parameters
-PSQL_OPTS="-h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U postgres -d cost_analytics_db -v ON_ERROR_STOP=1"
+PSQL_OPTS="-h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U postgres -d testdb -v ON_ERROR_STOP=1"
 
 # Run initialization scripts in order
 echo "📝 Running 00_create_users.sql..."

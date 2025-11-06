@@ -154,7 +154,7 @@ DB_USER=
 DB_PASSWORD=
 
 #AWS Configuration
-SSM_PATH=/aspectiq/demo
+SSM_PATH=/pepsico
 AWS_REGION=us-east-2
 TZ=America/New_York
 EOF

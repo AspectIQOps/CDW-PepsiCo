@@ -13,8 +13,8 @@ from audit_logger import log_user_action, log_data_lineage
 
 # Configuration
 DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'cost_analytics_db')
-DB_USER = os.getenv('DB_USER', 'etl_analytics')
+DB_NAME = os.getenv('DB_NAME', 'appd_licensing')
+DB_USER = os.getenv('DB_USER', 'appd_ro')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
 
 MOCK_END = datetime.now()

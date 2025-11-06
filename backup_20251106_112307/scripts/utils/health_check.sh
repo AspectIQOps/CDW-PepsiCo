@@ -43,8 +43,8 @@ else
 fi
 
 # Check SSM access
-if aws ssm get-parameter --name "/pepsico/DB_NAME" --region us-east-2 > /dev/null 2>&1; then
-    echo "✅ AWS SSM: Can access /pepsico/* parameters"
+if aws ssm get-parameter --name "/aspectiq/demo/DB_NAME" --region us-east-2 > /dev/null 2>&1; then
+    echo "✅ AWS SSM: Can access /aspectiq/demo/* parameters"
 else
     echo "❌ AWS SSM: Cannot access parameters"
     exit 1
