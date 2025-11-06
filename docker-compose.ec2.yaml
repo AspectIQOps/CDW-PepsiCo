@@ -2,7 +2,7 @@ services:
   etl-analytics:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-analytics
     environment:
       # Database connection (from SSM)
