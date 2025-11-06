@@ -24,12 +24,12 @@ echo "📊 Final data summary:"
 # Check if psql is available
 if command -v psql &> /dev/null; then
     # Try to get database stats
-    DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null)
+    DB_PASSWORD=$(aws ssm get-parameter --name "/aspectiq/demo/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null)
     
     if [ -n "$DB_PASSWORD" ]; then
         PGPASSWORD="$DB_PASSWORD" \
         PGSSLMODE=require \
-        psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U etl_analytics -d cost_analytics_db -c "
+        psql -h grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com -U appd_ro -d testdb -c "
         SELECT 'Applications' as metric, COUNT(*)::text as count FROM applications_dim
         UNION ALL
         SELECT 'Usage Records', COUNT(*)::text FROM license_usage_fact

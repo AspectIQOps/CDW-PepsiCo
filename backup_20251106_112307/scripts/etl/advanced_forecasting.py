@@ -10,8 +10,8 @@ from scipy import stats
 import os
 
 DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'cost_analytics_db')
-DB_USER = os.getenv('DB_USER', 'etl_analytics')
+DB_NAME = os.getenv('DB_NAME', 'appd_licensing')
+DB_USER = os.getenv('DB_USER', 'appd_ro')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
 
 def get_conn():

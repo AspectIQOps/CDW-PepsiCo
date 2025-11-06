@@ -13,7 +13,7 @@
 
 **RDS Endpoint:** `your-endpoint.us-east-1.rds.amazonaws.com`
 **Database:** `appd_licensing`
-**User (ETL):** `appd_ro`
+**User (ETL):** `etl_analytics`
 **User (Grafana):** `grafana_cloud`
 **Port:** `5432`
 
@@ -38,7 +38,7 @@
 
 **Current:** Manual environment variables
 **Phase 3:** AWS Systems Manager Parameter Store
-**SSM Path:** `/aspectiq/demo/`
+**SSM Path:** `/pepsico/`
 
 ---
 
@@ -52,7 +52,7 @@ docker-compose up -d
 docker logs pepsico-postgres
 
 # Connect to database
-docker exec -it pepsico-postgres psql -U appd_ro -d appd_licensing
+docker exec -it pepsico-postgres psql -U etl_analytics -d appd_licensing
 
 # Stop stack
 docker-compose down

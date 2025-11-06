@@ -57,7 +57,7 @@ Automated ETL pipeline that extracts AppDynamics license usage and ServiceNow CM
 
 ```bash
 # Check last ETL run status
-docker-compose exec postgres psql -U appd_ro -d appd_licensing -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing -c "
 SELECT 
     job_name,
     started_at,
@@ -140,7 +140,7 @@ docker-compose logs --tail=50 grafana
 
 ```bash
 # Check reconciliation match rate
-docker-compose exec postgres psql -U appd_ro -d appd_licensing -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing -c "
 SELECT 
     COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL) as matched,
     COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NULL) as appd_only,
@@ -168,7 +168,7 @@ FROM applications_dim;
 
 ```bash
 # Quick status check
-docker-compose exec postgres psql -U appd_ro -d appd_licensing -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing -c "
 SELECT 
     'Last ETL Run' as metric,
     MAX(finished_at)::text as value
@@ -203,7 +203,7 @@ WHERE ts::date = CURRENT_DATE;
 
 ```bash
 # Connect to database
-docker-compose exec postgres psql -U appd_ro -d appd_licensing
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing
 
 -- Vacuum and analyze all tables
 VACUUM ANALYZE;
@@ -375,7 +375,7 @@ ORDER BY total_chargeback DESC;
 
 ```bash
 # Generate CSV export for finance team
-docker-compose exec postgres psql -U appd_ro -d appd_licensing -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing -c "
 COPY (
     SELECT 
         cf.month_start,
@@ -479,7 +479,7 @@ docker-compose run --rm etl_appd   # AppDynamics only
 **When:** After manual data updates, performance issues
 
 ```bash
-docker-compose exec postgres psql -U appd_ro -d appd_licensing << EOF
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing << EOF
 REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_cost_summary;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mv_app_cost_current;
 SELECT 'Materialized views refreshed successfully' as status;
@@ -584,7 +584,7 @@ docker-compose run --rm etl python3 /app/scripts/etl/reconciliation_engine.py
 ```bash
 # Full database backup
 docker-compose exec postgres pg_dump \
-  -U appd_ro \
+  -U etl_analytics \
   -d appd_licensing \
   --format=custom \
   --compress=9 \
@@ -610,13 +610,13 @@ CREATE DATABASE appd_licensing_restore_test;
 
 # 3. Restore backup
 docker-compose exec postgres pg_restore \
-  -U appd_ro \
+  -U etl_analytics \
   -d appd_licensing_restore_test \
   --verbose \
   /tmp/manual_backup_20251030_120000.dump
 
 # 4. Verify restore
-docker-compose exec postgres psql -U appd_ro -d appd_licensing_restore_test -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing_restore_test -c "
 SELECT COUNT(*) as total_apps FROM applications_dim;
 "
 
@@ -645,7 +645,7 @@ SELECT COUNT(*) as total_apps FROM applications_dim;
 docker-compose logs --tail=100 etl
 
 # Check last error
-docker-compose exec postgres psql -U appd_ro -d appd_licensing -c "
+docker-compose exec postgres psql -U etl_analytics -d appd_licensing -c "
 SELECT error_message FROM etl_execution_log WHERE status = 'failed' ORDER BY started_at DESC LIMIT 1;
 "
 ```
@@ -781,7 +781,7 @@ docker-compose logs --tail=50 grafana
 # Test PostgreSQL connection from Grafana
 docker-compose exec grafana sh -c "
 apk add postgresql-client
-psql -h postgres -U appd_ro -d appd_licensing -c 'SELECT 1;'
+psql -h postgres -U etl_analytics -d appd_licensing -c 'SELECT 1;'
 "
 ```
 
@@ -796,7 +796,7 @@ psql -h postgres -U appd_ro -d appd_licensing -c 'SELECT 1;'
 2. Test panel queries manually:
    ```sql
    -- Copy query from panel and run in psql
-   docker-compose exec postgres psql -U appd_ro -d appd_licensing
+   docker-compose exec postgres psql -U etl_analytics -d appd_licensing
    ```
 3. Refresh materialized views (Section 5.2)
 4. Add indexes if queries are slow

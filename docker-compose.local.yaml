@@ -7,7 +7,7 @@ services:
     container_name: pepsico-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=appd_ro
+      - POSTGRES_USER=etl_analytics
       - POSTGRES_PASSWORD=appd_pass
       - POSTGRES_DB=appd_licensing
       - TZ=America/New_York
@@ -21,7 +21,7 @@ services:
     networks:
       - pepsico-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U appd_ro -d appd_licensing"]
+      test: ["CMD-SHELL", "pg_isready -U etl_analytics -d appd_licensing"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -40,7 +40,7 @@ services:
     env_file: .env
     environment:
       - DB_HOST=postgres
-      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
+      - SSM_PATH=${SSM_PATH:-/pepsico}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
@@ -62,7 +62,7 @@ services:
     env_file: .env
     environment:
       - DB_HOST=postgres
-      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
+      - SSM_PATH=${SSM_PATH:-/pepsico}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
@@ -79,13 +79,13 @@ services:
     build:
       context: .
       dockerfile: docker/etl/Dockerfile
-    container_name: pepsico-etl-unified
+    container_name: pepsico-etl-analytics
     restart: "no"
     command: ["./entrypoint.sh"]
     env_file: .env
     environment:
       - DB_HOST=postgres
-      - SSM_PATH=${SSM_PATH:-/aspectiq/demo}
+      - SSM_PATH=${SSM_PATH:-/pepsico}
     volumes:
       - ./scripts:/app/scripts:ro
       - ./docker/etl:/app/docker/etl:ro
@@ -105,7 +105,7 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:latest
     container_name: pepsico-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: "postgresql://appd_ro:appd_pass@postgres:5432/appd_licensing?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://etl_analytics:appd_pass@postgres:5432/appd_licensing?sslmode=disable"
     ports:
       - "9187:9187"
     networks:

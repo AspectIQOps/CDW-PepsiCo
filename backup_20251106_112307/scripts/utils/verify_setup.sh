@@ -14,11 +14,11 @@ echo ""
 # Fetch database connection details from SSM or use defaults
 DB_HOST=${DB_HOST:-grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com}
 DB_PORT=${DB_PORT:-5432}
-DB_NAME=${DB_NAME:-$(aws ssm get-parameter --name "/pepsico/DB_NAME" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "cost_analytics_db")}
-DB_USER=${DB_USER:-$(aws ssm get-parameter --name "/pepsico/DB_USER" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "etl_analytics")}
+DB_NAME=${DB_NAME:-$(aws ssm get-parameter --name "/aspectiq/demo/DB_NAME" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "testdb")}
+DB_USER=${DB_USER:-$(aws ssm get-parameter --name "/aspectiq/demo/DB_USER" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "appd_ro")}
 
 # Get password from SSM
-export PGPASSWORD=${DB_PASSWORD:-$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null)}
+export PGPASSWORD=${DB_PASSWORD:-$(aws ssm get-parameter --name "/aspectiq/demo/DB_PASSWORD" --with-decryption --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null)}
 
 # Enable SSL mode for RDS
 export PGSSLMODE=require

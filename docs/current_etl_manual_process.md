@@ -25,7 +25,7 @@ pip install -r requirements.txt
 export DB_HOST="your-rds-endpoint.us-east-1.rds.amazonaws.com"
 export DB_PORT="5432"
 export DB_NAME="appd_licensing"
-export DB_USER="appd_ro"
+export DB_USER="etl_analytics"
 export DB_PASSWORD="your-password"
 
 # AppDynamics credentials
@@ -39,7 +39,7 @@ export SNOW_USERNAME="your-username"
 export SNOW_PASSWORD="your-password"
 
 # AWS SSM (if using)
-export SSM_PATH="/aspectiq/demo"
+export SSM_PATH="/pepsico"
 3. Run ETL Scripts
 # Run AppDynamics ETL
 python scripts/etl/appd_etl.py
