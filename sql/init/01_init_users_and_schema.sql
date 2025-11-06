@@ -1,4 +1,3 @@
-cat > sql/init/01_init_users_and_schema.sql << 'EOF'
 -- ========================================
 -- Analytics Platform - Database Initialization
 -- ========================================
@@ -172,4 +171,3 @@ ORDER BY grantee, privilege_type;
 SELECT tool_name, is_active, last_successful_run
 FROM tool_configurations
 ORDER BY tool_name;
-EOF
