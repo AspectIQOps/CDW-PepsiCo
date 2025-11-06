@@ -1,4 +1,3 @@
-cat > scripts/setup/daily_startup.sh << 'EOF'
 #!/bin/bash
 # Daily Startup - Complete Environment Setup
 
@@ -30,8 +29,10 @@ DB_PASSWORD=$(aws ssm get-parameter --name "/pepsico/DB_PASSWORD" --with-decrypt
 DB_HOST=$(aws ssm get-parameter --name "/pepsico/DB_HOST" --region us-east-2 --query 'Parameter.Value' --output text)
 
 # Check if audit_etl_runs table exists (indicates initialized database)
-PGPASSWORD="$DB_PASSWORD" \
-PGSSLMODE=require \
+# FIX: Export PGPASSWORD before psql command
+export PGPASSWORD="$DB_PASSWORD"
+export PGSSLMODE=require
+
 TABLE_EXISTS=$(psql -h "$DB_HOST" -U etl_analytics -d cost_analytics_db -tAc \
   "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name='audit_etl_runs');" 2>/dev/null || echo "false")
 
@@ -62,6 +63,3 @@ echo "  • Run validation: python3 scripts/utils/validate_pipeline.py"
 echo "  • Check logs: docker logs pepsico-etl-analytics"
 echo ""
 echo "=========================================="
-EOF
-
-chmod +x scripts/setup/daily_startup.sh
