@@ -1,8 +1,5 @@
 #!/bin/bash
-# ==========================================================
 # Daily Startup - Complete Environment Setup
-# Full initialization from scratch for daily testing
-# ==========================================================
 
 set -e
 
@@ -46,6 +43,6 @@ echo ""
 echo "Next steps:"
 echo "  • Access Grafana to view dashboards"
 echo "  • Run validation: python3 scripts/utils/validate_pipeline.py"
-echo "  • Check logs: docker logs pepsico-etl-unified"
+echo "  • Check logs: docker logs pepsico-etl-analytics"
 echo ""
 echo "=========================================="

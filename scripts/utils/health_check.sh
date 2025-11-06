@@ -1,12 +1,9 @@
 #!/bin/bash
-# ==========================================================
 # System Health Check
-# Verifies Docker, AWS CLI, SSM access, and database connectivity
-# ==========================================================
 
 set -e
 
-echo "🏥 PepsiCo ETL Health Check"
+echo "🏥 PepsiCo Analytics Platform Health Check"
 echo "================================"
 
 # Check Docker
@@ -51,7 +48,7 @@ else
 fi
 
 # Check database connectivity
-DB_HOST=${DB_HOST:-grafana-test-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com}
+DB_HOST=${DB_HOST:-$(aws ssm get-parameter --name "/pepsico/DB_HOST" --region us-east-2 --query 'Parameter.Value' --output text 2>/dev/null || echo "pepsico-analytics-db.cbymoaeqyga6.us-east-2.rds.amazonaws.com")}
 if nc -zv "$DB_HOST" 5432 2>&1 | grep -q succeeded; then
     echo "✅ Database: Reachable at $DB_HOST:5432"
 else

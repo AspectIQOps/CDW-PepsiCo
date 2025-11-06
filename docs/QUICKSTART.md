@@ -45,16 +45,20 @@ git push origin deploy-docker
 # Via AWS Console or CLI
 aws rds create-db-instance \
   --db-instance-identifier pepsico-analytics-db \
-  --db-instance-class db.t3.medium \
+  --db-instance-class db.t3.micro \
   --engine postgres \
-  --engine-version 16.3 \
+  --engine-version 17.6 \
   --master-username postgres \
-  --master-user-password YOUR_SECURE_PASSWORD \
-  --allocated-storage 20 \
+  --master-user-password "postgrespassword" \
+  --allocated-storage 10 \
+  --storage-type gp2 \
   --db-name cost_analytics_db \
-  --vpc-security-group-ids sg-XXXXXXXXX \
+  --vpc-security-group-ids sg-04bcb80f17d14777d \
   --region us-east-2 \
-  --publicly-accessible
+  --publicly-accessible \
+  --no-multi-az \
+  --backup-retention-period 0 \
+  --no-deletion-protection
 ```
 
 **Save the endpoint:** `pepsico-analytics-db.xxxxxxxxxx.us-east-2.rds.amazonaws.com`
@@ -65,12 +69,13 @@ aws rds create-db-instance \
 # Via AWS Console or CLI
 aws ec2 run-instances \
   --image-id ami-0ea3c35c5c3284d82 \
-  --instance-type t3.medium \
-  --iam-instance-profile Name=EC2-SSM-Role \
-  --security-group-ids sg-XXXXXXXXX \
+  --instance-type t3.micro \
+  --iam-instance-profile Name=aspectiq-demo-role \
+  --security-group-ids sg-04bcb80f17d14777d \
   --region us-east-2 \
-  --key-name your-key-pair \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=pepsico-analytics}]'
+  --key-name aws-test-key \
+  --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=\"pepsico-analytics\"}]" \
+  --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=30,VolumeType=gp2,DeleteOnTermination=true}"
 ```
 
 ### C. Configure Security Group
@@ -78,10 +83,10 @@ aws ec2 run-instances \
 ```bash
 # Allow EC2 to access RDS on port 5432
 aws ec2 authorize-security-group-ingress \
-  --group-id sg-XXXXXXXXX \
+  --group-id sg-04bcb80f17d14777d \
   --protocol tcp \
   --port 5432 \
-  --source-group sg-XXXXXXXXX \
+  --source-group sg-04bcb80f17d14777d \
   --region us-east-2
 ```
 
@@ -117,7 +122,7 @@ chmod +x scripts/setup/setup_ssm_parameters.sh
 ```bash
 # Still on EC2, run automated setup
 chmod +x scripts/setup/ec2_initial_setup.sh
-./scripts/setup/ec2_initial_setup.sh
+sudo ./scripts/setup/ec2_initial_setup.sh
 ```
 
 **What this installs:**
