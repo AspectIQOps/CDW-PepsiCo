@@ -7,20 +7,16 @@ import random
 import sys
 from datetime import datetime, timedelta
 
-# Add audit logging to path
-sys.path.append('/app/scripts/etl')
-from audit_logger import log_user_action, log_data_lineage
-
 # Configuration
 DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'cost_analytics_db')
-DB_USER = os.getenv('DB_USER', 'etl_analytics')
+DB_NAME = os.getenv('DB_NAME', 'appd_licensing')
+DB_USER = os.getenv('DB_USER', 'appd_ro')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
 
 MOCK_END = datetime.now()
 MOCK_START = MOCK_END - timedelta(days=90)
 
-# UPDATED: Apps that will match ServiceNow data with high confidence
+# Apps that will match ServiceNow data with high confidence
 APPS = [
     {"name": "E-Commerce", "team": "Retail", "owner": "Alice Johnson"},
     {"name": "SAP Enterprise Services", "team": "Enterprise", "owner": "Bob Williams"},
@@ -241,8 +237,10 @@ def refresh_dashboard_views(conn):
     print("🔄 Refreshing dashboard views...")
     
     try:
-        # Since we don't have materialized views yet, just log success
-        print("✅ Dashboard views refreshed successfully (no materialized views configured yet)")
+        # Refresh materialized views if they exist
+        cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_cost_summary")
+        cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_app_cost_current")
+        print("✅ Dashboard views refreshed successfully")
         
     except Exception as e:
         print(f"⚠️  Warning: Failed to refresh views: {e}")
@@ -263,7 +261,7 @@ def run_appd_etl():
         # Step 1: Connect to database
         conn = get_conn()
         
-        # Step 2: Log ETL start
+        # Step 2: Log ETL start in etl_execution_log
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO etl_execution_log (job_name, started_at, status)
@@ -278,30 +276,17 @@ def run_appd_etl():
         apps = upsert_apps(conn)
         print(f"✅ Processed {len(apps)} applications")
         
-        # Log data lineage
-        for app in apps:
-            log_data_lineage(conn, run_id, 'AppDynamics_Mock', 'applications_dim', 
-                           {'app_id': app['id']}, 'UPSERT')
-        
         # Step 4: Generate and insert usage data
         insert_usage(conn, apps)
-        log_data_lineage(conn, run_id, 'AppDynamics_Mock', 'license_usage_fact', 
-                        {'app_count': len(apps)}, 'INSERT')
         
         # Step 5: Calculate costs from usage
         cost_rows = calculate_costs(conn)
-        log_data_lineage(conn, run_id, 'Calculated', 'license_cost_fact', 
-                        {'rows': cost_rows}, 'INSERT')
         
         # Step 6: Generate chargeback records
         chargeback_rows = generate_chargeback(conn)
-        log_data_lineage(conn, run_id, 'Calculated', 'chargeback_fact', 
-                        {'rows': chargeback_rows}, 'INSERT')
         
         # Step 7: Generate forecasts
         forecast_rows = generate_forecasts(conn)
-        log_data_lineage(conn, run_id, 'Calculated', 'forecast_fact', 
-                        {'rows': forecast_rows}, 'INSERT')
         
         # Step 8: Refresh dashboard views
         refresh_dashboard_views(conn)
