@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AWS_REGION="us-east-2"
 SSM_PREFIX="/pepsico"
-COMPOSE_FILE="$PROJECT_ROOT/docker-compose.ec2.yaml"
+COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yaml"
 
 # ========================================
 # Helper Functions
