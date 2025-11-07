@@ -48,7 +48,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}status${NC}     - Show system status
   ${GREEN}health${NC}     - Run health checks
   ${GREEN}validate${NC}   - Validate data quality
-  ${GREEN}logs${NC}       - Show container logs (follow)
+  ${GREEN}logs${NC}       - Show container logs and follow
   ${GREEN}clean${NC}      - Clean up containers and logs
   ${GREEN}db${NC}         - Connect to database
   ${GREEN}ssm${NC}        - List SSM parameters
