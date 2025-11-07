@@ -25,7 +25,7 @@ def seed_allocation_rules(conn):
             'rule_name': 'Platform Services - Proportional',
             'distribution_method': 'proportional_usage',
             'shared_service_code': 'PLATFORM',
-            'applies_to_sector_id': None,  # All sectors
+            'applies_to_sector_id': None,
             'is_active': True
         },
         {
@@ -56,14 +56,9 @@ def seed_allocation_rules(conn):
     
     conn.commit()
     cursor.close()
-    print("✅ Allocation rules seeded")
 
 def identify_shared_services(conn):
-    """
-    Identify applications that are shared services based on:
-    - H-code patterns (e.g., 'PLATFORM', 'SHARED', 'GLOBAL')
-    - Sector = 'Corporate/Shared Services' or 'Global IT'
-    """
+    """Identify applications that are shared services"""
     cursor = conn.cursor()
     
     cursor.execute("""
@@ -87,12 +82,9 @@ def identify_shared_services(conn):
     return shared_services
 
 def proportional_allocation(conn, shared_app_id, month_start):
-    """
-    Allocate shared service costs proportionally based on each sector's usage
-    """
+    """Allocate shared service costs proportionally based on each sector's usage"""
     cursor = conn.cursor()
     
-    # Get total cost for shared service this month
     cursor.execute("""
         SELECT SUM(usd_cost)
         FROM license_cost_fact
@@ -104,9 +96,8 @@ def proportional_allocation(conn, shared_app_id, month_start):
     
     if total_cost == 0:
         cursor.close()
-        return
+        return 0
     
-    # Get total usage across all sectors (excluding the shared service itself)
     cursor.execute("""
         SELECT 
             a.sector_id,
@@ -123,9 +114,9 @@ def proportional_allocation(conn, shared_app_id, month_start):
     
     if total_usage == 0:
         cursor.close()
-        return
+        return 0
     
-    # Allocate costs proportionally
+    allocations = 0
     for sector_id, usage in sector_usage:
         allocated_amount = total_cost * (usage / total_usage)
         
@@ -137,17 +128,16 @@ def proportional_allocation(conn, shared_app_id, month_start):
             DO UPDATE SET
                 usd_amount = chargeback_fact.usd_amount + EXCLUDED.usd_amount
         """, (month_start, shared_app_id, sector_id, round(allocated_amount, 2)))
+        allocations += 1
     
     conn.commit()
     cursor.close()
+    return allocations
 
 def equal_split_allocation(conn, shared_app_id, month_start):
-    """
-    Allocate shared service costs equally across all active sectors
-    """
+    """Allocate shared service costs equally across all active sectors"""
     cursor = conn.cursor()
     
-    # Get total cost
     cursor.execute("""
         SELECT SUM(usd_cost)
         FROM license_cost_fact
@@ -159,9 +149,8 @@ def equal_split_allocation(conn, shared_app_id, month_start):
     
     if total_cost == 0:
         cursor.close()
-        return
+        return 0
     
-    # Get all active sectors (those with at least one application)
     cursor.execute("""
         SELECT DISTINCT sector_id
         FROM applications_dim
@@ -172,9 +161,8 @@ def equal_split_allocation(conn, shared_app_id, month_start):
     
     if len(active_sectors) == 0:
         cursor.close()
-        return
+        return 0
     
-    # Split equally
     per_sector_cost = total_cost / len(active_sectors)
     
     for sector_id in active_sectors:
@@ -189,14 +177,12 @@ def equal_split_allocation(conn, shared_app_id, month_start):
     
     conn.commit()
     cursor.close()
+    return len(active_sectors)
 
 def custom_formula_allocation(conn, shared_app_id, month_start):
-    """
-    Custom allocation formula - e.g., 40% proportional, 60% equal split
-    """
+    """Custom allocation formula - 40% proportional, 60% equal split"""
     cursor = conn.cursor()
     
-    # Get total cost
     cursor.execute("""
         SELECT SUM(usd_cost)
         FROM license_cost_fact
@@ -208,12 +194,10 @@ def custom_formula_allocation(conn, shared_app_id, month_start):
     
     if total_cost == 0:
         cursor.close()
-        return
+        return 0
     
-    # 40% based on usage
     proportional_portion = total_cost * 0.4
     
-    # Get sector usage proportions
     cursor.execute("""
         SELECT 
             a.sector_id,
@@ -228,12 +212,11 @@ def custom_formula_allocation(conn, shared_app_id, month_start):
     sector_usage = cursor.fetchall()
     total_usage = sum([row[1] for row in sector_usage])
     
-    # 60% equal split
     equal_portion = total_cost * 0.6
     active_sectors = [row[0] for row in sector_usage]
     per_sector_equal = equal_portion / len(active_sectors) if active_sectors else 0
     
-    # Allocate combined
+    allocations = 0
     for sector_id, usage in sector_usage:
         proportional_share = proportional_portion * (usage / total_usage) if total_usage > 0 else 0
         total_allocation = proportional_share + per_sector_equal
@@ -246,34 +229,28 @@ def custom_formula_allocation(conn, shared_app_id, month_start):
             DO UPDATE SET
                 usd_amount = chargeback_fact.usd_amount + EXCLUDED.usd_amount
         """, (month_start, shared_app_id, sector_id, round(total_allocation, 2)))
+        allocations += 1
     
     conn.commit()
     cursor.close()
+    return allocations
 
 def apply_allocation_rules(conn):
-    """
-    Apply all active allocation rules for the current month
-    """
+    """Apply all active allocation rules for the current month"""
     print("💰 Applying allocation rules for shared services...")
     
-    # Seed rules if not present
     seed_allocation_rules(conn)
-    
-    # Identify shared services
     shared_services = identify_shared_services(conn)
     
     if not shared_services:
         print("⚠️  No shared services identified")
-        return
+        return 0
     
     print(f"Found {len(shared_services)} shared service(s)")
     
-    # Current month
     month_start = datetime.now().replace(day=1).date()
     
     cursor = conn.cursor()
-    
-    # Get active rules
     cursor.execute("""
         SELECT rule_id, distribution_method, shared_service_code
         FROM allocation_rules
@@ -288,20 +265,20 @@ def apply_allocation_rules(conn):
     for app_id, app_name, h_code, sector_name in shared_services:
         print(f"  Allocating costs for: {app_name} (H-code: {h_code})")
         
-        # Match rule based on h_code pattern
         for rule_id, method, service_code in active_rules:
             if h_code and service_code in h_code:
                 if method == 'proportional_usage':
-                    proportional_allocation(conn, app_id, month_start)
+                    count = proportional_allocation(conn, app_id, month_start)
                 elif method == 'equal_split':
-                    equal_split_allocation(conn, app_id, month_start)
+                    count = equal_split_allocation(conn, app_id, month_start)
                 elif method == 'custom_formula':
-                    custom_formula_allocation(conn, app_id, month_start)
+                    count = custom_formula_allocation(conn, app_id, month_start)
                 
-                allocations_made += 1
+                allocations_made += count
                 break
     
     print(f"✅ Applied {allocations_made} allocation rules")
+    return allocations_made
 
 def generate_allocation_report(conn):
     """Generate summary of allocated costs"""
@@ -333,10 +310,77 @@ def generate_allocation_report(conn):
     
     cursor.close()
 
-if __name__ == '__main__':
-    conn = get_conn()
+def run_allocation():
+    """Main allocation orchestration function"""
+    print("=" * 60)
+    print("Allocation Engine Starting")
+    print("=" * 60)
+    
+    conn = None
+    run_id = None
+    
     try:
-        apply_allocation_rules(conn)
+        # Step 1: Connect to database
+        conn = get_conn()
+        
+        # Step 2: Log ETL start
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO etl_execution_log (job_name, started_at, status)
+            VALUES ('allocation_engine', NOW(), 'running')
+            RETURNING run_id
+        """)
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        
+        # Step 3: Apply allocation rules
+        allocations_made = apply_allocation_rules(conn)
+        
+        # Step 4: Generate report
         generate_allocation_report(conn)
+        
+        # Step 5: Update ETL log
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE etl_execution_log 
+            SET finished_at = NOW(), 
+                status = 'success',
+                rows_ingested = %s
+            WHERE run_id = %s
+        """, (allocations_made, run_id))
+        conn.commit()
+        cursor.close()
+        
+        print("=" * 60)
+        print("✅ Allocation Complete")
+        print("=" * 60)
+        
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ FATAL: {e}")
+        print("=" * 60)
+        import traceback
+        traceback.print_exc()
+        
+        # Update ETL log with error
+        if conn and run_id:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE etl_execution_log 
+                    SET finished_at = NOW(), 
+                        status = 'failed',
+                        error_message = %s
+                    WHERE run_id = %s
+                """, (str(e), run_id))
+                conn.commit()
+                cursor.close()
+            except:
+                pass
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+if __name__ == '__main__':
+    run_allocation()
