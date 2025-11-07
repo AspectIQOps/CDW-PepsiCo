@@ -344,3 +344,46 @@ if __name__ == "__main__":
             records_processed=500,
             metadata={'endpoint': 'cmdb'}
         )
+
+# ========================================
+# Standalone Helper Functions
+# For backwards compatibility with existing ETL scripts
+# ========================================
+
+def log_user_action(conn, run_id, action, details=None):
+    """
+    Log a user action during ETL execution.
+    (Placeholder for future implementation)
+    """
+    pass
+
+
+def log_data_lineage(conn, run_id, source, target_table, metadata, operation):
+    """
+    Log data lineage for ETL operations.
+    Tracks where data came from and where it went.
+    """
+    try:
+        from psycopg2.extras import Json
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE audit_etl_runs
+            SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+            WHERE run_id = %s
+        """, (
+            Json({
+                'lineage': {
+                    'source': source,
+                    'target': target_table,
+                    'operation': operation,
+                    'metadata': metadata,
+                    'timestamp': datetime.now().isoformat()
+                }
+            }),
+            run_id
+        ))
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        # Don't fail the ETL if lineage logging fails
+        pass
