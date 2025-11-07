@@ -64,10 +64,9 @@ if ! command -v docker &> /dev/null; then
     sudo usermod -aG docker $USER
     
     # Apply group changes to current session
-    newgrp docker << DOCKEREOF
-    # Continue with the rest of the script in the new group context
+    newgrp docker
+    #Continue with the rest of the script in the new group context
     echo -e "${GREEN}✓ Docker group permissions applied${NC}"
-    DOCKEREOF
 
     echo -e "${GREEN}✓ Docker installed${NC}"
 else
@@ -258,5 +257,4 @@ echo "  Region: $AWS_REGION"
 echo "  SSM Path: /pepsico/*"
 echo ""
 echo -e "${GREEN}All credentials are stored in AWS SSM Parameter Store${NC}"
-echo -e "${GREEN}No .env file needed - everything pulls from SSM${NC}"
 echo ""
