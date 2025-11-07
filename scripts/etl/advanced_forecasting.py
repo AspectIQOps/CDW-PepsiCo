@@ -18,32 +18,23 @@ def get_conn():
     return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
 
 def linear_regression_forecast(usage_history, periods=12):
-    """
-    Linear trend-based forecasting
-    Returns: projected values and confidence intervals
-    """
+    """Linear trend-based forecasting"""
     if len(usage_history) < 7:
         return None, None, None
     
-    # FIX: Convert to numpy arrays explicitly with proper dtype
     x = np.arange(len(usage_history), dtype=np.float64)
     y = np.array(usage_history, dtype=np.float64)
     
-    # Check for constant values (zero variance) - causes linregress to fail
     if np.std(y) == 0:
-        # If all values are the same, just return that constant
         constant_value = y[0]
         projections = np.full(periods, constant_value, dtype=np.float64)
         return projections, projections, projections
     
-    # Linear regression: y = mx + b
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
     
-    # Project future values
     future_x = np.arange(len(usage_history), len(usage_history) + periods, dtype=np.float64)
     projections = slope * future_x + intercept
     
-    # Calculate confidence intervals (95%)
     prediction_std = std_err * np.sqrt(1 + 1/len(x) + (future_x - np.mean(x))**2 / np.sum((x - np.mean(x))**2))
     ci_high = projections + 1.96 * prediction_std
     ci_low = projections - 1.96 * prediction_std
@@ -51,22 +42,16 @@ def linear_regression_forecast(usage_history, periods=12):
     return projections, ci_low, ci_high
 
 def exponential_smoothing(usage_history, alpha=0.3, periods=12):
-    """
-    Exponential smoothing for trend forecasting
-    alpha: smoothing factor (0-1)
-    """
+    """Exponential smoothing for trend forecasting"""
     if len(usage_history) < 2:
         return None, None, None
     
-    # FIX: Convert to numpy array explicitly
     usage_array = np.array(usage_history, dtype=np.float64)
     
-    # Simple exponential smoothing
     smoothed = [usage_array[0]]
     for i in range(1, len(usage_array)):
         smoothed.append(alpha * usage_array[i] + (1 - alpha) * smoothed[i-1])
     
-    # Project forward
     last_value = smoothed[-1]
     trend = (smoothed[-1] - smoothed[-2]) if len(smoothed) > 1 else 0
     
@@ -74,48 +59,20 @@ def exponential_smoothing(usage_history, alpha=0.3, periods=12):
     for i in range(periods):
         projections.append(last_value + trend * (i + 1))
     
-    # Confidence intervals based on historical variance
     std_dev = np.std(usage_array)
     ci_low = [p - 1.96 * std_dev for p in projections]
     ci_high = [p + 1.96 * std_dev for p in projections]
     
     return np.array(projections, dtype=np.float64), np.array(ci_low, dtype=np.float64), np.array(ci_high, dtype=np.float64)
 
-def seasonal_decomposition(usage_history, period=30):
-    """
-    Detect and account for seasonal patterns
-    period: seasonality cycle (e.g., 30 days for monthly patterns)
-    """
-    if len(usage_history) < period * 2:
-        return None
-    
-    # Convert to numpy array
-    usage_array = np.array(usage_history, dtype=np.float64)
-    
-    # Simple moving average for trend
-    trend = np.convolve(usage_array, np.ones(period)/period, mode='valid')
-    
-    # Detrended series
-    detrended = usage_array[len(usage_array)-len(trend):] - trend
-    
-    # Seasonal component (average pattern over cycles)
-    seasonal = []
-    for i in range(period):
-        seasonal.append(np.mean(detrended[i::period]))
-    
-    return seasonal
-
 def ensemble_forecast(usage_history, periods=12):
-    """
-    Combine multiple forecasting methods for improved accuracy
-    """
+    """Combine multiple forecasting methods for improved accuracy"""
     linear_proj, linear_low, linear_high = linear_regression_forecast(usage_history, periods)
     exp_proj, exp_low, exp_high = exponential_smoothing(usage_history, periods=periods)
     
     if linear_proj is None or exp_proj is None:
         return None, None, None
     
-    # Weighted average (60% linear, 40% exponential)
     ensemble_proj = 0.6 * linear_proj + 0.4 * exp_proj
     ensemble_low = 0.6 * linear_low + 0.4 * exp_low
     ensemble_high = 0.6 * linear_high + 0.4 * exp_high
@@ -123,14 +80,11 @@ def ensemble_forecast(usage_history, periods=12):
     return ensemble_proj, ensemble_low, ensemble_high
 
 def generate_advanced_forecasts(conn):
-    """
-    Generate forecasts using multiple algorithms for all applications
-    """
+    """Generate forecasts using multiple algorithms for all applications"""
     cursor = conn.cursor()
     
     print("📈 Generating advanced forecasts...")
     
-    # Get applications with sufficient history (90+ days)
     cursor.execute("""
         SELECT DISTINCT app_id, capability_id, tier
         FROM license_usage_fact
@@ -150,7 +104,6 @@ def generate_advanced_forecasts(conn):
     forecast_count = 0
     
     for app_id, capability_id, tier in app_capability_pairs:
-        # Get historical usage
         cursor.execute("""
             SELECT DATE(ts), AVG(units_consumed)
             FROM license_usage_fact
@@ -167,13 +120,11 @@ def generate_advanced_forecasts(conn):
         if len(history) < 30:
             continue
         
-        # Generate ensemble forecast
         projections, ci_low, ci_high = ensemble_forecast(history, periods=12)
         
         if projections is None:
             continue
         
-        # Get current pricing for cost projection
         cursor.execute("""
             SELECT unit_rate FROM price_config
             WHERE capability_id = %s
@@ -185,7 +136,6 @@ def generate_advanced_forecasts(conn):
         price_row = cursor.fetchone()
         unit_rate = price_row[0] if price_row else 0.50
         
-        # Insert forecasts for next 12 months
         base_date = datetime.now().replace(day=1)
         for i in range(12):
             month_start = (base_date + timedelta(days=32*i)).replace(day=1)
@@ -208,7 +158,7 @@ def generate_advanced_forecasts(conn):
                 app_id,
                 capability_id,
                 tier,
-                round(float(projections[i]) * 30, 2),  # Daily to monthly
+                round(float(projections[i]) * 30, 2),
                 round(float(projections[i]) * 30 * float(unit_rate), 2),
                 round(float(ci_low[i]) * 30, 2),
                 round(float(ci_high[i]) * 30, 2),
@@ -224,14 +174,11 @@ def generate_advanced_forecasts(conn):
     return forecast_count
 
 def validate_forecast_accuracy(conn):
-    """
-    Back-test forecast accuracy against historical data
-    """
+    """Back-test forecast accuracy against historical data"""
     cursor = conn.cursor()
     
     print("🔍 Validating forecast accuracy...")
     
-    # Compare forecasts made 30 days ago with actual usage
     cursor.execute("""
         WITH forecast_comparison AS (
             SELECT 
@@ -264,10 +211,77 @@ def validate_forecast_accuracy(conn):
     
     cursor.close()
 
-if __name__ == '__main__':
-    conn = get_conn()
+def run_forecasting():
+    """Main forecasting orchestration function"""
+    print("=" * 60)
+    print("Advanced Forecasting Starting")
+    print("=" * 60)
+    
+    conn = None
+    run_id = None
+    
     try:
-        generate_advanced_forecasts(conn)
+        # Step 1: Connect to database
+        conn = get_conn()
+        
+        # Step 2: Log ETL start
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO etl_execution_log (job_name, started_at, status)
+            VALUES ('advanced_forecasting', NOW(), 'running')
+            RETURNING run_id
+        """)
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        
+        # Step 3: Generate forecasts
+        forecast_count = generate_advanced_forecasts(conn)
+        
+        # Step 4: Validate accuracy
         validate_forecast_accuracy(conn)
+        
+        # Step 5: Update ETL log
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE etl_execution_log 
+            SET finished_at = NOW(), 
+                status = 'success',
+                rows_ingested = %s
+            WHERE run_id = %s
+        """, (forecast_count, run_id))
+        conn.commit()
+        cursor.close()
+        
+        print("=" * 60)
+        print("✅ Forecasting Complete")
+        print("=" * 60)
+        
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ FATAL: {e}")
+        print("=" * 60)
+        import traceback
+        traceback.print_exc()
+        
+        # Update ETL log with error
+        if conn and run_id:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE etl_execution_log 
+                    SET finished_at = NOW(), 
+                        status = 'failed',
+                        error_message = %s
+                    WHERE run_id = %s
+                """, (str(e), run_id))
+                conn.commit()
+                cursor.close()
+            except:
+                pass
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+if __name__ == '__main__':
+    run_forecasting()

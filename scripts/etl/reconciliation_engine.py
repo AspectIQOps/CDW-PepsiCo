@@ -55,10 +55,6 @@ def reconcile_applications(conn):
         if best_score >= 80:
             snow_id, snow_sys_id, snow_name = best_match
             
-            # FIXED: Merge the two records properly
-            # Strategy: Instead of copying sn_sys_id to AppD record (which violates unique constraint),
-            # we'll do the opposite - copy AppD data to ServiceNow record, then delete AppD record
-            
             # Step 1: Copy AppD fields to the ServiceNow record
             cursor.execute("""
                 UPDATE applications_dim 
@@ -68,50 +64,42 @@ def reconcile_applications(conn):
                 WHERE app_id = %s
             """, (appd_id, appd_id, snow_id))
             
-            # Step 2: Update any foreign key references that point to the AppD record
-            # to now point to the ServiceNow record (which now has both sets of data)
-            
-            # Update usage facts (move from AppD record to ServiceNow record)
+            # Step 2: Update foreign key references
             cursor.execute("""
                 UPDATE license_usage_fact
                 SET app_id = %s
                 WHERE app_id = %s
             """, (snow_id, appd_id))
             
-            # Update cost facts
             cursor.execute("""
                 UPDATE license_cost_fact
                 SET app_id = %s
                 WHERE app_id = %s
             """, (snow_id, appd_id))
             
-            # Update chargeback facts
             cursor.execute("""
                 UPDATE chargeback_fact
                 SET app_id = %s
                 WHERE app_id = %s
             """, (snow_id, appd_id))
             
-            # Update forecast facts
             cursor.execute("""
                 UPDATE forecast_fact
                 SET app_id = %s
                 WHERE app_id = %s
             """, (snow_id, appd_id))
             
-            # Step 3: Log the successful match BEFORE deleting the AppD record
+            # Step 3: Log the match
             cursor.execute("""
                 INSERT INTO reconciliation_log 
                 (source_a, source_b, match_key_a, match_key_b, confidence_score, match_status, resolved_app_id)
                 VALUES ('AppDynamics', 'ServiceNow', %s, %s, %s, 'auto_matched', %s)
             """, (appd_name, snow_name, best_score, snow_id))
             
-            # Step 4: Now safe to delete the AppD-only record
+            # Step 4: Delete AppD-only record
             cursor.execute("DELETE FROM applications_dim WHERE app_id = %s", (appd_id,))
             
             matches_made += 1
-            
-            # Remove this matched ServiceNow service from the list to avoid re-matching
             snow_services = [(sid, ssid, sname) for sid, ssid, sname in snow_services if sid != snow_id]
         
         # Manual review threshold: 50-80%
@@ -153,7 +141,7 @@ def generate_reconciliation_report(conn):
     print(f"Total Applications: {stats[3]}")
     print(f"Match Rate: {match_rate:.1f}%")
     
-    # Additional detail: Show match rate for apps with AppD monitoring
+    # AppD-specific match rate
     cursor.execute("""
         SELECT 
             COUNT(*) as total_appd_apps,
@@ -173,14 +161,77 @@ def generate_reconciliation_report(conn):
     cursor.close()
     return match_rate
 
-if __name__ == '__main__':
-    conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
+def run_reconciliation():
+    """Main reconciliation orchestration function"""
+    print("=" * 60)
+    print("Reconciliation Engine Starting")
+    print("=" * 60)
+    
+    conn = None
+    run_id = None
+    
     try:
-        reconcile_applications(conn)
+        # Step 1: Connect to database
+        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
+        
+        # Step 2: Log ETL start
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO etl_execution_log (job_name, started_at, status)
+            VALUES ('reconciliation_engine', NOW(), 'running')
+            RETURNING run_id
+        """)
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        
+        # Step 3: Perform reconciliation
+        matches_made = reconcile_applications(conn)
+        
+        # Step 4: Generate report
         match_rate = generate_reconciliation_report(conn)
+        
+        # Step 5: Update ETL log
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE etl_execution_log 
+            SET finished_at = NOW(), 
+                status = 'success',
+                rows_ingested = %s
+            WHERE run_id = %s
+        """, (matches_made, run_id))
+        conn.commit()
+        cursor.close()
         
         if match_rate < 95:
             print(f"⚠️  Overall match rate {match_rate:.1f}% is below 95% target")
             print("    (This is expected when ServiceNow has more apps than AppDynamics monitors)")
+        
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ FATAL: {e}")
+        print("=" * 60)
+        import traceback
+        traceback.print_exc()
+        
+        # Update ETL log with error
+        if conn and run_id:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE etl_execution_log 
+                    SET finished_at = NOW(), 
+                        status = 'failed',
+                        error_message = %s
+                    WHERE run_id = %s
+                """, (str(e), run_id))
+                conn.commit()
+                cursor.close()
+            except:
+                pass
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+if __name__ == '__main__':
+    run_reconciliation()

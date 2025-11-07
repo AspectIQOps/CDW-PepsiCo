@@ -40,35 +40,6 @@ def fetch_snow_table(table_name, fields, query=None):
         params['sysparm_offset'] += 1000
     return all_records
 
-#fetch_servers and fetch_relationships added by Claude 10/30/2025
-def fetch_servers(conn):
-    """Extract cmdb_ci_server for application-server relationships"""
-    servers = fetch_snow_table('cmdb_ci_server', 
-        ['sys_id', 'name', 'ip_address', 'os', 'virtual'],
-        query='operational_status=1')
-    
-# Insert into servers_dim table
-    cursor = conn.cursor()
-    for server in servers:
-        cursor.execute("""
-            INSERT INTO servers_dim (sn_sys_id, server_name, ip_address, os, is_virtual)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (sn_sys_id) DO UPDATE SET
-                server_name = EXCLUDED.server_name,
-                updated_at = NOW()
-        """, (server['sys_id'], server['name'], server.get('ip_address'), 
-              server.get('os'), server.get('virtual')))
-    conn.commit()
-
-# Map applications to servers - store in app_server_mapping table
-def fetch_relationships(conn):
-    """Extract cmdb_rel_ci for app-to-server mappings"""
-    relationships = fetch_snow_table('cmdb_rel_ci',
-        ['parent', 'child', 'type'],
-        query='type.name=Runs on::Runs')
-    
-
-
 def _upsert_dim(cursor, table_name, name_field, name_value):
     pk_map = {'owners_dim': 'owner_id', 'sectors_dim': 'sector_id', 
               'architecture_dim': 'architecture_id', 'capabilities_dim': 'capability_id'}
@@ -124,7 +95,6 @@ def _upsert_server(conn, server):
         cursor.close()
         return None
 
-
 def fetch_and_load_servers(conn):
     """Extract servers from ServiceNow and load into servers_dim"""
     try:
@@ -147,7 +117,6 @@ def fetch_and_load_servers(conn):
         print(f"ERROR fetching servers: {e}")
         return 0
 
-
 def fetch_and_map_relationships(conn):
     """Extract app-to-server relationships and populate app_server_mapping"""
     try:
@@ -168,11 +137,9 @@ def fetch_and_map_relationships(conn):
             if not parent_sys_id or not child_sys_id:
                 continue
             
-            # Get app_id from applications_dim (parent is the application)
             cursor.execute("SELECT app_id FROM applications_dim WHERE sn_sys_id = %s", (parent_sys_id,))
             app_result = cursor.fetchone()
             
-            # Get server_id from servers_dim (child is the server)
             cursor.execute("SELECT server_id FROM servers_dim WHERE sn_sys_id = %s", (child_sys_id,))
             server_result = cursor.fetchone()
             
@@ -197,14 +164,13 @@ def fetch_and_map_relationships(conn):
         print(f"ERROR mapping relationships: {e}")
         conn.rollback()
         return 0
-    
+
 def upsert_application(conn, svc):
     cursor = conn.cursor()
     sys_id = svc.get('sys_id')
     name = svc.get('name')
     if not sys_id or not name: return False
     
-    # ADD THIS HELPER:
     def get_val(field):
         v = svc.get(field)
         return v.get('display_value') if isinstance(v, dict) else v
@@ -243,14 +209,31 @@ def upsert_application(conn, svc):
         cursor.close()
 
 def run_snow_etl():
+    """Main ETL orchestration function"""
+    print("=" * 60)
+    print("ServiceNow ETL Starting")
+    print("=" * 60)
+    
+    conn = None
+    run_id = None
+    total_rows = 0
+    
     try:
-        print("=" * 60)
-        print("ServiceNow ETL Starting")
-        print("=" * 60)
-        
+        # Step 1: Connect to database
         conn = connect_db()
         
-        # Step 1: Load applications
+        # Step 2: Log ETL start
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO etl_execution_log (job_name, started_at, status)
+            VALUES ('snow_etl', NOW(), 'running')
+            RETURNING run_id
+        """)
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        
+        # Step 3: Load applications
         print("\n[1/3] Loading applications from cmdb_ci_service...")
         services = fetch_snow_table('cmdb_ci_service', 
             ['sys_id','name','owned_by','managed_by','u_sector','business_unit',
@@ -260,14 +243,29 @@ def run_snow_etl():
         
         success = sum(1 for s in services if upsert_application(conn, s))
         print(f"✅ Applications: {success}/{len(services)}")
+        total_rows += success
         
-        # Step 2: Load servers from cmdb_ci_server
+        # Step 4: Load servers
         print("\n[2/3] Loading servers from cmdb_ci_server...")
         servers_loaded = fetch_and_load_servers(conn)
+        total_rows += servers_loaded
         
-        # Step 3: Map application-server relationships from cmdb_rel_ci
+        # Step 5: Map relationships
         print("\n[3/3] Mapping application-server relationships...")
         relationships_mapped = fetch_and_map_relationships(conn)
+        total_rows += relationships_mapped
+        
+        # Step 6: Update ETL log
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE etl_execution_log 
+            SET finished_at = NOW(), 
+                status = 'success',
+                rows_ingested = %s
+            WHERE run_id = %s
+        """, (total_rows, run_id))
+        conn.commit()
+        cursor.close()
         
         print("=" * 60)
         print(f"✅ ServiceNow ETL Complete")
@@ -282,6 +280,22 @@ def run_snow_etl():
         print("=" * 60)
         import traceback
         traceback.print_exc()
+        
+        # Update ETL log with error
+        if conn and run_id:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE etl_execution_log 
+                    SET finished_at = NOW(), 
+                        status = 'failed',
+                        error_message = %s
+                    WHERE run_id = %s
+                """, (str(e), run_id))
+                conn.commit()
+                cursor.close()
+            except:
+                pass
     finally:
         if conn: 
             conn.close()
