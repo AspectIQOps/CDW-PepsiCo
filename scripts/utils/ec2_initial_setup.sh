@@ -108,7 +108,7 @@ echo ""
 # ========================================
 # 4. Clone Repository
 # ========================================
-echo -e "${YELLOW}Step 5: Cloning project repository...${NC}"
+echo -e "${YELLOW}Step 4: Cloning project repository...${NC}"
 
 if [ -d "$PROJECT_DIR" ]; then
     echo -e "${YELLOW}Project directory exists. Pulling latest changes...${NC}"
@@ -125,7 +125,7 @@ echo ""
 # ========================================
 # 5. Verify SSM Parameters
 # ========================================
-echo -e "${YELLOW}Step 6: Verifying SSM parameters...${NC}"
+echo -e "${YELLOW}Step 5: Verifying SSM parameters...${NC}"
 
 SSM_PREFIX="/pepsico"
 REQUIRED_PARAMS=(
@@ -165,12 +165,12 @@ echo ""
 # ========================================
 # 6. Test Database Connection
 # ========================================
-echo -e "${YELLOW}Step 7: Testing database connection...${NC}"
+echo -e "${YELLOW}Step 6: Testing database connection...${NC}"
 
 DB_HOST=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_HOST" --region $AWS_REGION --query 'Parameter.Value' --output text)
 DB_NAME=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_NAME" --region $AWS_REGION --query 'Parameter.Value' --output text)
-DB_USER=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_USER" --region $AWS_REGION --query 'Parameter.Value' --output text)
-DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_PASSWORD" --with-decryption --region $AWS_REGION --query 'Parameter.Value' --output text)
+DB_USER=postgres
+DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_ADMIN_PASSWORD" --with-decryption --region $AWS_REGION --query 'Parameter.Value' --output text)
 
 if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT 1;" &>/dev/null; then
     echo -e "${GREEN}✓ Database connection successful${NC}"
@@ -194,7 +194,7 @@ echo ""
 # ========================================
 # 7. Create Environment File
 # ========================================
-echo -e "${YELLOW}Step 8: Creating .env file...${NC}"
+echo -e "${YELLOW}Step 7: Creating .env file...${NC}"
 
 cat > "$PROJECT_DIR/.env" <<EOF
 # Auto-generated on $(date)
@@ -226,7 +226,7 @@ echo ""
 # ========================================
 # 8. Build Docker Image
 # ========================================
-echo -e "${YELLOW}Step 9: Building Docker image...${NC}"
+echo -e "${YELLOW}Step 8: Building Docker image...${NC}"
 
 cd "$PROJECT_DIR"
 docker compose -f docker-compose.ec2.yaml build
@@ -237,7 +237,7 @@ echo ""
 # ========================================
 # 9. Make Scripts Executable
 # ========================================
-echo -e "${YELLOW}Step 10: Setting script permissions...${NC}"
+echo -e "${YELLOW}Step 9: Setting script permissions...${NC}"
 
 chmod +x scripts/setup/*.sh
 chmod +x scripts/utils/*.sh
