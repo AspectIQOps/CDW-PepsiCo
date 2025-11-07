@@ -63,11 +63,6 @@ if ! command -v docker &> /dev/null; then
     # Add user to docker group
     sudo usermod -aG docker $USER
     
-    # Apply group changes to current session
-    newgrp docker
-    #Continue with the rest of the script in the new group context
-    echo -e "${GREEN}✓ Docker group permissions applied${NC}"
-
     echo -e "${GREEN}✓ Docker installed${NC}"
 else
     echo -e "${GREEN}✓ Docker already installed${NC}"
@@ -209,7 +204,7 @@ echo ""
 echo -e "${YELLOW}Step 7: Building Docker image...${NC}"
 
 cd "$PROJECT_DIR"
-docker compose -f docker-compose.ec2.yaml build
+sudo docker compose -f docker-compose.ec2.yaml build
 
 echo -e "${GREEN}✓ Docker image built${NC}"
 echo ""
