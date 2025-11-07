@@ -106,21 +106,7 @@ psql --version
 echo ""
 
 # ========================================
-# 4. Install Python Dependencies
-# ========================================
-echo -e "${YELLOW}Step 4: Installing Python dependencies...${NC}"
-
-sudo apt-get install -y python3 python3-pip python3-venv
-pip3 install --upgrade pip
-
-# Install common Python packages for utilities
-pip3 install boto3 psycopg2-binary requests python-dotenv
-
-echo -e "${GREEN}✓ Python environment ready${NC}"
-echo ""
-
-# ========================================
-# 5. Clone Repository
+# 4. Clone Repository
 # ========================================
 echo -e "${YELLOW}Step 5: Cloning project repository...${NC}"
 
@@ -137,7 +123,7 @@ echo -e "${GREEN}✓ Repository ready at: $PROJECT_DIR${NC}"
 echo ""
 
 # ========================================
-# 6. Verify SSM Parameters
+# 5. Verify SSM Parameters
 # ========================================
 echo -e "${YELLOW}Step 6: Verifying SSM parameters...${NC}"
 
@@ -177,7 +163,7 @@ echo -e "${GREEN}✓ All required SSM parameters present${NC}"
 echo ""
 
 # ========================================
-# 7. Test Database Connection
+# 6. Test Database Connection
 # ========================================
 echo -e "${YELLOW}Step 7: Testing database connection...${NC}"
 
@@ -206,7 +192,7 @@ fi
 echo ""
 
 # ========================================
-# 8. Create Environment File
+# 7. Create Environment File
 # ========================================
 echo -e "${YELLOW}Step 8: Creating .env file...${NC}"
 
@@ -238,7 +224,7 @@ echo -e "${GREEN}✓ Environment file created${NC}"
 echo ""
 
 # ========================================
-# 9. Build Docker Image
+# 8. Build Docker Image
 # ========================================
 echo -e "${YELLOW}Step 9: Building Docker image...${NC}"
 
@@ -249,7 +235,7 @@ echo -e "${GREEN}✓ Docker image built${NC}"
 echo ""
 
 # ========================================
-# 10. Make Scripts Executable
+# 9. Make Scripts Executable
 # ========================================
 echo -e "${YELLOW}Step 10: Setting script permissions...${NC}"
 
