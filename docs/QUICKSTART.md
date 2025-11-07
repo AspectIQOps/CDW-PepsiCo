@@ -9,33 +9,6 @@
 
 ---
 
-## Step 1: Rename Project Files (5 minutes)
-
-```bash
-# On your local machine
-cd CDW-PepsiCo
-
-# Run bulk rename script
-chmod +x bulk_rename.sh
-./bulk_rename.sh
-
-# Review changes
-git diff
-
-# Commit
-git add -A
-git commit -m "Refactor to analytics platform naming"
-git push origin deploy-docker
-```
-
-**What this does:**
-- Renames database: `cost_analytics_db` → `cost_analytics_db`
-- Renames user: `etl_analytics` → `etl_analytics`
-- Updates SSM paths: `/pepsico` → `/pepsico`
-- Updates container names
-- Creates backup in `backup_YYYYMMDD_HHMMSS/`
-
----
 
 ## Step 2: Create AWS Resources (15 minutes)
 
