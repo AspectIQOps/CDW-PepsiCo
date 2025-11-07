@@ -63,6 +63,12 @@ if ! command -v docker &> /dev/null; then
     # Add user to docker group
     sudo usermod -aG docker $USER
     
+    # Apply group changes to current session
+    newgrp docker << DOCKEREOF
+    # Continue with the rest of the script in the new group context
+    echo -e "${GREEN}✓ Docker group permissions applied${NC}"
+    DOCKEREOF
+
     echo -e "${GREEN}✓ Docker installed${NC}"
 else
     echo -e "${GREEN}✓ Docker already installed${NC}"
