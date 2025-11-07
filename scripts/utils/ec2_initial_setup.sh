@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# EC2 Initial Setup - Analytics Platform
+# EC2 Initial Setup - Analytics Platform (FIXED VERSION)
 # Run this script on a fresh Ubuntu EC2 instance
 #
 # Prerequisites:
@@ -76,7 +76,7 @@ echo ""
 # ========================================
 echo -e "${YELLOW}Step 3: Installing AWS CLI and PostgreSQL client...${NC}"
 
-# Install unzip if not present
+# Install unzip if not present (needed for AWS CLI)
 if ! command -v unzip &> /dev/null; then
     sudo apt-get install -y unzip
 fi
@@ -94,7 +94,7 @@ fi
 
 aws --version
 
-# PostgreSQL client
+# PostgreSQL client (needed for running SQL initialization scripts from host)
 if ! command -v psql &> /dev/null; then
     sudo apt-get install -y postgresql-client
     echo -e "${GREEN}✓ PostgreSQL client installed${NC}"
@@ -108,7 +108,7 @@ echo ""
 # ========================================
 # 4. Clone Repository
 # ========================================
-echo -e "${YELLOW}Step 4: Cloning project repository...${NC}"
+echo -e "${YELLOW}Step 4: Setting up project repository...${NC}"
 
 if [ -d "$PROJECT_DIR" ]; then
     echo -e "${YELLOW}Project directory exists. Pulling latest changes...${NC}"
@@ -133,8 +133,8 @@ REQUIRED_PARAMS=(
     "${SSM_PREFIX}/DB_NAME"
     "${SSM_PREFIX}/DB_USER"
     "${SSM_PREFIX}/DB_PASSWORD"
-    "${SSM_PREFIX}/appdynamics/CONTROLLER"
-    "${SSM_PREFIX}/servicenow/INSTANCE"
+    "${SSM_PREFIX}/DB_ADMIN_PASSWORD"
+    "${SSM_PREFIX}/GRAFANA_DB_PASSWORD"
 )
 
 MISSING_PARAMS=()
@@ -163,70 +163,45 @@ echo -e "${GREEN}✓ All required SSM parameters present${NC}"
 echo ""
 
 # ========================================
-# 6. Test Database Connection
+# 6. Test Database Connection (as postgres master user)
 # ========================================
 echo -e "${YELLOW}Step 6: Testing database connection...${NC}"
 
 DB_HOST=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_HOST" --region $AWS_REGION --query 'Parameter.Value' --output text)
 DB_NAME=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_NAME" --region $AWS_REGION --query 'Parameter.Value' --output text)
-DB_USER=postgres
-DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_ADMIN_PASSWORD" --with-decryption --region $AWS_REGION --query 'Parameter.Value' --output text)
+MASTER_PASSWORD=$(aws ssm get-parameter --name "${SSM_PREFIX}/DB_ADMIN_PASSWORD" --with-decryption --region $AWS_REGION --query 'Parameter.Value' --output text)
 
-if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT 1;" &>/dev/null; then
+export PGSSLMODE=require
+
+if PGPASSWORD=$MASTER_PASSWORD psql -h $DB_HOST -U postgres -d postgres -c "SELECT 1;" &>/dev/null; then
     echo -e "${GREEN}✓ Database connection successful${NC}"
     echo "  Host: $DB_HOST"
-    echo "  Database: $DB_NAME"
-    echo "  User: $DB_USER"
+    echo "  Database: $DB_NAME (master user verified)"
+    
+    # Check if target database exists
+    DB_EXISTS=$(PGPASSWORD=$MASTER_PASSWORD psql -h $DB_HOST -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME';" 2>/dev/null)
+    if [ "$DB_EXISTS" = "1" ]; then
+        echo "  ✓ Database '$DB_NAME' exists"
+    else
+        echo "  ⚠  Database '$DB_NAME' does not exist (will be created during initialization)"
+    fi
 else
     echo -e "${RED}✗ Database connection failed${NC}"
     echo "  Host: $DB_HOST"
     echo "  Database: $DB_NAME"
-    echo "  User: $DB_USER"
     echo ""
     echo -e "${YELLOW}Please verify:${NC}"
     echo "  1. RDS security group allows EC2 access"
-    echo "  2. Database credentials are correct"
-    echo "  3. Database exists and user has permissions"
+    echo "  2. Master password is correct in SSM"
+    echo "  3. RDS instance is in 'available' state"
     exit 1
 fi
 echo ""
 
 # ========================================
-# 7. Create Environment File
+# 7. Build Docker Image
 # ========================================
-echo -e "${YELLOW}Step 7: Creating .env file...${NC}"
-
-cat > "$PROJECT_DIR/.env" <<EOF
-# Auto-generated on $(date)
-# Database Configuration
-DB_HOST=$DB_HOST
-DB_NAME=$DB_NAME
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASSWORD
-DB_PORT=5432
-
-# AWS Configuration
-AWS_REGION=$AWS_REGION
-AWS_DEFAULT_REGION=$AWS_REGION
-
-# SSM Paths
-SSM_BASE_PATH=$SSM_PREFIX
-SSM_APPDYNAMICS_PREFIX=${SSM_PREFIX}/appdynamics
-SSM_SERVICENOW_PREFIX=${SSM_PREFIX}/servicenow
-
-# Pipeline Configuration
-PIPELINE_MODE=full
-LOG_LEVEL=INFO
-EOF
-
-chmod 600 "$PROJECT_DIR/.env"
-echo -e "${GREEN}✓ Environment file created${NC}"
-echo ""
-
-# ========================================
-# 8. Build Docker Image
-# ========================================
-echo -e "${YELLOW}Step 8: Building Docker image...${NC}"
+echo -e "${YELLOW}Step 7: Building Docker image...${NC}"
 
 cd "$PROJECT_DIR"
 docker compose -f docker-compose.ec2.yaml build
@@ -235,12 +210,13 @@ echo -e "${GREEN}✓ Docker image built${NC}"
 echo ""
 
 # ========================================
-# 9. Make Scripts Executable
+# 8. Make Scripts Executable
 # ========================================
-echo -e "${YELLOW}Step 9: Setting script permissions...${NC}"
+echo -e "${YELLOW}Step 8: Setting script permissions...${NC}"
 
-chmod +x scripts/setup/*.sh
-chmod +x scripts/utils/*.sh
+chmod +x platform_manager.sh 2>/dev/null || true
+chmod +x init_database.sh 2>/dev/null || true
+chmod +x sql_initialization.sh 2>/dev/null || true
 
 echo -e "${GREEN}✓ Script permissions set${NC}"
 echo ""
@@ -252,25 +228,29 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}✓ EC2 Setup Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
+echo -e "${YELLOW}⚠  IMPORTANT: Log out and back in for docker group to take effect${NC}"
+echo "   Or run: newgrp docker"
+echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 echo ""
-echo "1. Initialize database schema:"
+echo "1. Log out and back in (for docker group)"
+echo ""
+echo "2. Initialize database schema:"
 echo "   cd $PROJECT_DIR"
-echo "   ./scripts/setup/init_database.sh"
+echo "   ./init_database.sh"
 echo ""
-echo "2. Run ETL pipeline:"
-echo "   ./scripts/utils/daily_startup.sh"
+echo "3. Start ETL pipeline:"
+echo "   ./platform_manager.sh start"
 echo ""
-echo "3. Check logs:"
-echo "   docker compose -f docker-compose.ec2.yaml logs -f"
+echo "4. Monitor logs:"
+echo "   ./platform_manager.sh logs"
 echo ""
-echo -e "${YELLOW}Useful Commands:${NC}"
-echo "  Health check: ./scripts/utils/health_check.sh"
-echo "  Verify data:  ./scripts/utils/verify_setup.sh"
-echo "  Shutdown:     ./scripts/utils/daily_teardown.sh"
-echo ""
-echo -e "${BLUE}Project configured for:${NC}"
-echo "  Database: cost_analytics_db"
-echo "  ETL User: etl_analytics"
+echo -e "${BLUE}Configuration Summary:${NC}"
+echo "  Project: $PROJECT_DIR"
+echo "  Database: $DB_NAME"
+echo "  Region: $AWS_REGION"
 echo "  SSM Path: /pepsico/*"
+echo ""
+echo -e "${GREEN}All credentials are stored in AWS SSM Parameter Store${NC}"
+echo -e "${GREEN}No .env file needed - everything pulls from SSM${NC}"
 echo ""
