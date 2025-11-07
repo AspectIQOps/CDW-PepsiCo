@@ -5,38 +5,30 @@ services:
       dockerfile: docker/etl/Dockerfile
     container_name: pepsico-etl-analytics
     environment:
-      # Database connection (from SSM)
-      - DB_HOST=${DB_HOST}
-      - DB_NAME=cost_analytics_db
-      - DB_USER=etl_analytics
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_PORT=5432
-      
       # AWS Configuration
       - AWS_REGION=us-east-2
       - AWS_DEFAULT_REGION=us-east-2
       
-      # SSM Parameter paths for credentials
+      # Database connection will be fetched from SSM by entrypoint.sh
+      # SSM Parameter paths
+      - SSM_PREFIX=/pepsico
       - SSM_APPDYNAMICS_PREFIX=/pepsico/appdynamics
       - SSM_SERVICENOW_PREFIX=/pepsico/servicenow
       
       # Pipeline configuration
-      - PIPELINE_MODE=full
-      - LOG_LEVEL=INFO
+      - PIPELINE_MODE=${PIPELINE_MODE:-full}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DRY_RUN=${DRY_RUN:-false}
       
     volumes:
-      - ./scripts/etl:/app/scripts/etl
+      - ./scripts:/app/scripts
       - ./sql:/app/sql
       - ./logs:/app/logs
+      - ~/.aws:/root/.aws:ro  # Mount AWS credentials for SSM access
     
-    command: >
-      bash -c "
-        echo 'Starting Analytics ETL Pipeline...' &&
-        echo 'Database: cost_analytics_db' &&
-        echo 'User: etl_analytics' &&
-        echo '' &&
-        python3 /app/scripts/etl/run_pipeline.py
-      "
+    entrypoint: ["/app/docker/etl/entrypoint.sh"]
+    
+    command: python3 /app/scripts/etl/run_pipeline.py
     
     restart: "no"
     
