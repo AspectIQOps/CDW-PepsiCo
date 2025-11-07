@@ -76,6 +76,11 @@ echo ""
 # ========================================
 echo -e "${YELLOW}Step 3: Installing AWS CLI and PostgreSQL client...${NC}"
 
+# Install unzip if not present
+if ! command -v unzip &> /dev/null; then
+    sudo apt-get install -y unzip
+fi
+
 # AWS CLI
 if ! command -v aws &> /dev/null; then
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
