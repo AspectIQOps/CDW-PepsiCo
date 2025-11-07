@@ -1,6 +1,19 @@
 """
 Audit Logger for Analytics Platform
-Logs all ETL pipeline activities to audit_etl_runs table
+
+NOTE: This module provides advanced audit logging capabilities with UUID-based tracking,
+stage-level metrics, and JSONB metadata support via the audit_etl_runs table.
+
+CURRENT STATUS: Not actively used in MVP. ETL scripts use the simpler etl_execution_log 
+table directly for job-level tracking (start time, end time, status, row count).
+
+FUTURE USE: Can be integrated if client requires:
+- Per-stage tracking (extract/transform/load separately)
+- Detailed metrics (records_inserted vs records_updated vs records_failed)
+- Data lineage tracking
+- Enhanced metadata capture
+
+For now, keeping this module for future extensibility but not calling it from ETL scripts.
 """
 
 import os
@@ -18,6 +31,8 @@ class AuditLogger:
     """
     Handles audit logging for ETL pipeline runs.
     Tracks execution by tool, stage, status, and metrics.
+    
+    NOTE: Currently not in use - kept for future enhancement.
     """
     
     def __init__(self, db_connection=None):
@@ -39,8 +54,8 @@ class AuditLogger:
         try:
             self.conn = psycopg2.connect(
                 host=os.getenv('DB_HOST'),
-                database=os.getenv('DB_NAME', 'cost_analytics_db'),
-                user=os.getenv('DB_USER', 'etl_analytics'),
+                database=os.getenv('DB_NAME', 'appd_licensing'),
+                user=os.getenv('DB_USER', 'appd_ro'),
                 password=os.getenv('DB_PASSWORD'),
                 port=os.getenv('DB_PORT', 5432)
             )
@@ -299,86 +314,3 @@ class AuditLogger:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - close connection."""
         self.close()
-
-
-# Example usage
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Example: Using context manager
-    with AuditLogger() as audit:
-        # Check if tool is active
-        if audit.check_tool_active('appdynamics'):
-            # Start a run
-            run_id = audit.start_run(
-                tool_name='appdynamics',
-                pipeline_stage='extract',
-                metadata={'source': 'api', 'version': '1.0'}
-            )
-            
-            # ... do work ...
-            
-            # End the run
-            audit.end_run(
-                run_id=run_id,
-                status='success',
-                records_processed=1000,
-                records_inserted=950,
-                records_updated=50,
-                records_failed=0
-            )
-            
-            # Update tool last run
-            audit.update_tool_last_run('appdynamics')
-    
-    # Example: Simple one-call logging
-    with AuditLogger() as audit:
-        audit.log_run(
-            tool_name='servicenow',
-            pipeline_stage='load',
-            status='success',
-            records_processed=500,
-            metadata={'endpoint': 'cmdb'}
-        )
-
-# ========================================
-# Standalone Helper Functions
-# For backwards compatibility with existing ETL scripts
-# ========================================
-
-def log_user_action(conn, run_id, action, details=None):
-    """
-    Log a user action during ETL execution.
-    
-    Args:
-        conn: Database connection
-        run_id: UUID of the current run
-        action: Description of the action
-        details: Optional metadata dictionary
-    """
-    # Placeholder for future implementation
-    # Could log to a separate user_actions table if needed
-    pass
-
-
-def log_data_lineage(conn, run_id, source, target_table, metadata, operation):
-    """
-    Log data lineage for ETL operations.
-    Tracks data flow from source to target tables.
-    
-    Args:
-        conn: Database connection
-        run_id: Run ID (can be integer or UUID depending on which table is used)
-        source: Source system/table name (e.g., 'AppDynamics_Mock')
-        target_table: Target table name (e.g., 'license_usage_fact')
-        metadata: Dictionary with additional context (e.g., {'app_count': 6})
-        operation: Type of operation (INSERT, UPDATE, UPSERT, etc.)
-    """
-    # Simple placeholder implementation - just pass
-    # The lineage tracking can be enhanced later if needed
-    pass
-    
