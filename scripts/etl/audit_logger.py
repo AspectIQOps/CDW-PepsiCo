@@ -1,25 +1,346 @@
-# scripts/etl/audit_logger.py
-#!/usr/bin/env python3
+"""
+Audit Logger for Analytics Platform
+Logs all ETL pipeline activities to audit_etl_runs table
+"""
 
-"""Audit logging utilities for ETL pipeline"""
-import json
+import os
+import uuid
+from datetime import datetime
+from typing import Optional, Dict, Any
+import psycopg2
+from psycopg2.extras import Json
+import logging
 
-def log_user_action(conn, user, action_type, target_table, details):
-    """Log administrative actions"""
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO user_actions (user_name, action_type, target_table, details)
-        VALUES (%s, %s, %s, %s)
-    """, (user, action_type, target_table, json.dumps(details)))
-    conn.commit()
-    cursor.close()
+logger = logging.getLogger(__name__)
 
-def log_data_lineage(conn, run_id, source_system, target_table, target_pk, action):
-    """Log data changes for audit trail"""
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO data_lineage (run_id, source_system, target_table, target_pk, action)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (run_id, source_system, target_table, json.dumps(target_pk), action))
-    conn.commit()
-    cursor.close()
+
+class AuditLogger:
+    """
+    Handles audit logging for ETL pipeline runs.
+    Tracks execution by tool, stage, status, and metrics.
+    """
+    
+    def __init__(self, db_connection=None):
+        """
+        Initialize audit logger with database connection.
+        
+        Args:
+            db_connection: Existing psycopg2 connection, or None to create new
+        """
+        self.conn = db_connection
+        self.should_close = False
+        
+        if self.conn is None:
+            self._create_connection()
+            self.should_close = True
+    
+    def _create_connection(self):
+        """Create database connection from environment variables."""
+        try:
+            self.conn = psycopg2.connect(
+                host=os.getenv('DB_HOST'),
+                database=os.getenv('DB_NAME', 'cost_analytics_db'),
+                user=os.getenv('DB_USER', 'etl_analytics'),
+                password=os.getenv('DB_PASSWORD'),
+                port=os.getenv('DB_PORT', 5432)
+            )
+            logger.info("Audit logger connected to database")
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}")
+            raise
+    
+    def start_run(
+        self,
+        tool_name: str,
+        pipeline_stage: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Log the start of an ETL run.
+        
+        Args:
+            tool_name: Name of the tool (e.g., 'appdynamics', 'servicenow')
+            pipeline_stage: Stage of pipeline (e.g., 'extract', 'transform', 'load')
+            metadata: Optional metadata dictionary
+            
+        Returns:
+            run_id: UUID string for this run
+        """
+        run_id = str(uuid.uuid4())
+        
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO audit_etl_runs (
+                        run_id,
+                        tool_name,
+                        pipeline_stage,
+                        start_time,
+                        status,
+                        metadata
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    run_id,
+                    tool_name,
+                    pipeline_stage,
+                    datetime.now(),
+                    'running',
+                    Json(metadata) if metadata else None
+                ))
+                self.conn.commit()
+                
+            logger.info(f"Started {tool_name} {pipeline_stage} run: {run_id}")
+            return run_id
+            
+        except Exception as e:
+            logger.error(f"Failed to log run start: {e}")
+            self.conn.rollback()
+            raise
+    
+    def end_run(
+        self,
+        run_id: str,
+        status: str,
+        records_processed: Optional[int] = None,
+        records_inserted: Optional[int] = None,
+        records_updated: Optional[int] = None,
+        records_failed: Optional[int] = None,
+        error_message: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Log the completion of an ETL run.
+        
+        Args:
+            run_id: UUID of the run to update
+            status: Final status ('success', 'failed', 'partial')
+            records_processed: Total records processed
+            records_inserted: Records inserted
+            records_updated: Records updated
+            records_failed: Records that failed
+            error_message: Error message if status is 'failed'
+            metadata: Optional metadata dictionary
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE audit_etl_runs
+                    SET 
+                        end_time = %s,
+                        status = %s,
+                        records_processed = %s,
+                        records_inserted = %s,
+                        records_updated = %s,
+                        records_failed = %s,
+                        error_message = %s,
+                        metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+                    WHERE run_id = %s
+                """, (
+                    datetime.now(),
+                    status,
+                    records_processed,
+                    records_inserted,
+                    records_updated,
+                    records_failed,
+                    error_message,
+                    Json(metadata) if metadata else Json({}),
+                    run_id
+                ))
+                self.conn.commit()
+                
+            logger.info(f"Completed run {run_id} with status: {status}")
+            
+        except Exception as e:
+            logger.error(f"Failed to log run end: {e}")
+            self.conn.rollback()
+            raise
+    
+    def log_run(
+        self,
+        tool_name: str,
+        pipeline_stage: str,
+        status: str,
+        records_processed: Optional[int] = None,
+        records_inserted: Optional[int] = None,
+        records_updated: Optional[int] = None,
+        records_failed: Optional[int] = None,
+        error_message: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Convenience method to log a complete run in one call.
+        Use this for simple runs or when start/end tracking isn't needed.
+        
+        Args:
+            tool_name: Name of the tool (e.g., 'appdynamics', 'servicenow')
+            pipeline_stage: Stage of pipeline
+            status: Run status
+            records_processed: Total records processed
+            records_inserted: Records inserted
+            records_updated: Records updated
+            records_failed: Records that failed
+            error_message: Error message if failed
+            metadata: Optional metadata dictionary
+            
+        Returns:
+            run_id: UUID string for this run
+        """
+        run_id = str(uuid.uuid4())
+        
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO audit_etl_runs (
+                        run_id,
+                        tool_name,
+                        pipeline_stage,
+                        start_time,
+                        end_time,
+                        status,
+                        records_processed,
+                        records_inserted,
+                        records_updated,
+                        records_failed,
+                        error_message,
+                        metadata
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    run_id,
+                    tool_name,
+                    pipeline_stage,
+                    datetime.now(),
+                    datetime.now(),
+                    status,
+                    records_processed,
+                    records_inserted,
+                    records_updated,
+                    records_failed,
+                    error_message,
+                    Json(metadata) if metadata else None
+                ))
+                self.conn.commit()
+                
+            logger.info(f"Logged {tool_name} {pipeline_stage} run: {status}")
+            return run_id
+            
+        except Exception as e:
+            logger.error(f"Failed to log run: {e}")
+            self.conn.rollback()
+            raise
+    
+    def update_tool_last_run(self, tool_name: str):
+        """
+        Update the last_successful_run timestamp in tool_configurations.
+        Call this after a successful ETL run for a tool.
+        
+        Args:
+            tool_name: Name of the tool that completed successfully
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE tool_configurations
+                    SET last_successful_run = %s,
+                        updated_at = %s
+                    WHERE tool_name = %s
+                """, (
+                    datetime.now(),
+                    datetime.now(),
+                    tool_name
+                ))
+                self.conn.commit()
+                
+            logger.info(f"Updated last_successful_run for {tool_name}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to update tool_configurations: {e}")
+            self.conn.rollback()
+    
+    def check_tool_active(self, tool_name: str) -> bool:
+        """
+        Check if a tool is marked as active in tool_configurations.
+        
+        Args:
+            tool_name: Name of the tool to check
+            
+        Returns:
+            True if tool is active, False otherwise
+        """
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT is_active 
+                    FROM tool_configurations 
+                    WHERE tool_name = %s
+                """, (tool_name,))
+                
+                result = cur.fetchone()
+                
+                if result is None:
+                    logger.warning(f"Tool {tool_name} not found in tool_configurations")
+                    return False
+                
+                return result[0]
+                
+        except Exception as e:
+            logger.error(f"Failed to check tool status: {e}")
+            return False
+    
+    def close(self):
+        """Close database connection if we created it."""
+        if self.should_close and self.conn:
+            self.conn.close()
+            logger.info("Audit logger connection closed")
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close connection."""
+        self.close()
+
+
+# Example usage
+if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Example: Using context manager
+    with AuditLogger() as audit:
+        # Check if tool is active
+        if audit.check_tool_active('appdynamics'):
+            # Start a run
+            run_id = audit.start_run(
+                tool_name='appdynamics',
+                pipeline_stage='extract',
+                metadata={'source': 'api', 'version': '1.0'}
+            )
+            
+            # ... do work ...
+            
+            # End the run
+            audit.end_run(
+                run_id=run_id,
+                status='success',
+                records_processed=1000,
+                records_inserted=950,
+                records_updated=50,
+                records_failed=0
+            )
+            
+            # Update tool last run
+            audit.update_tool_last_run('appdynamics')
+    
+    # Example: Simple one-call logging
+    with AuditLogger() as audit:
+        audit.log_run(
+            tool_name='servicenow',
+            pipeline_stage='load',
+            status='success',
+            records_processed=500,
+            metadata={'endpoint': 'cmdb'}
+        )

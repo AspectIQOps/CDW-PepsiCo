@@ -1,4 +1,3 @@
-cat > scripts/setup/sql_initialization.sh << 'EOF'
 #!/bin/bash
 set -e
 
@@ -28,6 +27,3 @@ envsubst < sql/init/01_init_users_and_schema.sql | psql $PSQL_OPTS
 
 echo ""
 echo "✅ Database initialization complete!"
-EOF
-
-chmod +x scripts/setup/sql_initialization.sh

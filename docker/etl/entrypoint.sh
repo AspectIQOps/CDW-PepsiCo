@@ -1,117 +1,178 @@
-#!/bin/sh
-# Use /bin/sh for lightweight execution inside the slim image
+#!/bin/bash
+#
+# Docker Entrypoint for Analytics Platform
+# Fetches credentials from AWS SSM Parameter Store
+#
 
-# Exit immediately if any command fails (ensures security check is reliable)
 set -e
 
-# Ensure Python scripts can import from each other
-export PYTHONPATH=/app/scripts/etl:$PYTHONPATH
+echo "========================================="
+echo "Analytics Platform - Starting ETL"
+echo "========================================="
+echo ""
 
-# --- Check Configuration ---
-# DB_HOST and SSM_PATH are passed from docker-compose.yaml
-if [ -z "$DB_HOST" ] || [ -z "$SSM_PATH" ]; then
-    echo "ERROR: DB_HOST or SSM_PATH environment variable is not set. Cannot proceed."
+# Configuration
+AWS_REGION="${AWS_REGION:-us-east-2}"
+SSM_PREFIX="/pepsico"
+
+# Color output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# ========================================
+# Fetch Database Credentials from SSM
+# ========================================
+
+echo -e "${YELLOW}Fetching database credentials from SSM...${NC}"
+
+export DB_HOST=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/DB_HOST" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null)
+
+export DB_NAME=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/DB_NAME" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null)
+
+export DB_USER=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/DB_USER" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null)
+
+export DB_PASSWORD=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/DB_PASSWORD" \
+    --with-decryption \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null)
+
+# Validate required parameters
+if [ -z "$DB_HOST" ] || [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
+    echo -e "${RED}Error: Required SSM parameters not found${NC}"
+    echo "Expected parameters at:"
+    echo "  ${SSM_PREFIX}/DB_HOST"
+    echo "  ${SSM_PREFIX}/DB_NAME"
+    echo "  ${SSM_PREFIX}/DB_USER"
+    echo "  ${SSM_PREFIX}/DB_PASSWORD"
     exit 1
 fi
 
-# ... (AWS SSM and Local Variable Check block remains unchanged) ...
-# 
+echo -e "${GREEN}✓ Database credentials retrieved${NC}"
+echo "  Host: $DB_HOST"
+echo "  Database: $DB_NAME"
+echo "  User: $DB_USER"
+echo ""
 
-if [ -z "$DB_PASSWORD" ]; then
-    echo "Starting ETL job setup. DB_PASSWORD not found locally. Fetching production secrets from AWS SSM path: ${SSM_PATH}"
-    
-    # --- Fetch Secrets from AWS SSM and Export as Environment Variables ---
-    # Database Secrets
-    export DB_NAME=$(aws ssm get-parameter --name "${SSM_PATH}/DB_NAME" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export DB_USER=$(aws ssm get-parameter --name "${SSM_PATH}/DB_USER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export DB_PASSWORD=$(aws ssm get-parameter --name "${SSM_PATH}/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export PGPASSWORD=$DB_PASSWORD
-    
-    # AppDynamics Secrets
-    export APPD_CONTROLLER=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CONTROLLER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export APPD_ACCOUNT=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_ACCOUNT" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export APPD_CLIENT_ID=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_ID" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export APPD_CLIENT_SECRET=$(aws ssm get-parameter --name "${SSM_PATH}/APPD_CLIENT_SECRET" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
+# ========================================
+# Fetch AppDynamics Credentials from SSM
+# ========================================
 
-    # ServiceNow Secrets
-    export SN_INSTANCE=$(aws ssm get-parameter --name "${SSM_PATH}/SN_INSTANCE" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export SN_USER=$(aws ssm get-parameter --name "${SSM_PATH}/SN_USER" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    export SN_PASS=$(aws ssm get-parameter --name "${SSM_PATH}/SN_PASS" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "")
-    
-    # After SSM fetch, perform a final check to ensure we got all necessary variables
-    if [ -z "$DB_PASSWORD" ] || [ -z "$APPD_CLIENT_SECRET" ]; then
-        echo "ERROR: Failed to fetch critical secrets (DB or APPD) from SSM. Ensure parameters exist at ${SSM_PATH} and the IAM role is correct."
-        exit 1
-    fi
-    echo "Secrets fetched successfully."
+echo -e "${YELLOW}Fetching AppDynamics credentials from SSM...${NC}"
 
+export APPD_CONTROLLER=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/CONTROLLER" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+export APPD_ACCOUNT=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/ACCOUNT" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+export APPD_CLIENT_ID=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/CLIENT_ID" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+export APPD_CLIENT_SECRET=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/CLIENT_SECRET" \
+    --with-decryption \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+if [ -n "$APPD_CONTROLLER" ]; then
+    echo -e "${GREEN}✓ AppDynamics credentials retrieved${NC}"
+    echo "  Controller: $APPD_CONTROLLER"
+    echo "  Account: $APPD_ACCOUNT"
 else
-    echo "Local DB_PASSWORD detected. Skipping AWS SSM fetch and using local environment variables for testing."
-    echo "SSM path is available if needed: ${SSM_PATH}"
+    echo -e "${YELLOW}⚠ AppDynamics credentials not found (skipping)${NC}"
 fi
-
-# --- Wait for Postgres to be ready ---
-DB_USER_FOR_READY=${DB_USER:-devuser}
-echo "Waiting for database at ${DB_HOST}..."
-
-until pg_isready -h "$DB_HOST" -p 5432 -U "$DB_USER_FOR_READY"; do
-  >&2 echo "Postgres is unavailable - sleeping"
-  sleep 2
-done
->&2 echo "Postgres is up and accessible."
-
-# =========================================================================
-# 💡 ETL EXECUTION SEQUENCE
-# This section defines the order of operations for data loading and transformation.
-# =========================================================================
-
-echo "=========================================="
-echo "Starting ETL pipeline execution."
-echo "=========================================="
-
-echo "Step 1: ServiceNow ETL - Loading CMDB data (applications, servers, relationships)"
-python3 /app/scripts/etl/snow_etl.py || { echo "❌ ERROR: ServiceNow ETL failed."; exit 1; }
-
 echo ""
-echo "Step 2: AppDynamics ETL - Loading usage data and calculating costs"
-python3 /app/scripts/etl/appd_etl.py || { echo "❌ ERROR: AppDynamics ETL failed."; exit 1; }
 
-echo ""
-echo "Step 3: Reconciliation - Fuzzy matching AppD and ServiceNow applications"
-python3 /app/scripts/etl/reconciliation_engine.py || { echo "❌ ERROR: Reconciliation failed."; exit 1; }
+# ========================================
+# Fetch ServiceNow Credentials from SSM
+# ========================================
 
-echo ""
-echo "Step 4: Advanced Forecasting - Generating 12-month projections"
-python3 /app/scripts/etl/advanced_forecasting.py || { echo "❌ ERROR: Forecasting failed."; exit 1; }
+echo -e "${YELLOW}Fetching ServiceNow credentials from SSM...${NC}"
 
-echo ""
-echo "Step 5: Allocation Engine - Distributing shared service costs"
-python3 /app/scripts/etl/allocation_engine.py || { echo "❌ ERROR: Allocation failed."; exit 1; }
+export SN_INSTANCE=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/servicenow/INSTANCE" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
 
-echo ""
-echo "=========================================="
-echo "✅ ETL Pipeline Complete!"
-echo "=========================================="
+export SN_USER=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/servicenow/USER" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
 
-# Refresh materialized views for dashboard performance
-echo "Step 6: Refreshing materialized views for dashboard performance"
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME << EOF
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_cost_summary;
-REFRESH MATERIALIZED VIEW CONCURRENTLY mv_app_cost_current;
-EOF
+export SN_PASS=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/servicenow/PASS" \
+    --with-decryption \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
 
-if [ $? -eq 0 ]; then
-    echo "✅ Materialized views refreshed successfully"
+if [ -n "$SN_INSTANCE" ]; then
+    echo -e "${GREEN}✓ ServiceNow credentials retrieved${NC}"
+    echo "  Instance: $SN_INSTANCE"
+    echo "  User: $SN_USER"
 else
-    echo "⚠️  Warning: Materialized view refresh failed (views may not exist yet)"
+    echo -e "${YELLOW}⚠ ServiceNow credentials not found (skipping)${NC}"
 fi
-
 echo ""
-echo "Step 7: Validation - Checking data quality"
-python3 /app/scripts/utils/validate_pipeline.py || echo "⚠️  Validation warnings detected"
 
-# End of pipeline
+# ========================================
+# Test Database Connection
+# ========================================
+
+echo -e "${YELLOW}Testing database connection...${NC}"
+
+if PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT 1;" > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Database connection successful${NC}"
+else
+    echo -e "${RED}Error: Cannot connect to database${NC}"
+    echo "Check:"
+    echo "  1. RDS security group allows EC2 access"
+    echo "  2. Database credentials are correct"
+    echo "  3. Database exists and user has permissions"
+    exit 1
+fi
 echo ""
-echo "=========================================="
-echo "🎉 Pipeline execution completed!"
-echo "=========================================="
+
+# ========================================
+# Execute Command
+# ========================================
+
+echo "========================================="
+echo "Starting ETL Pipeline"
+echo "========================================="
+echo ""
+
+# Execute the provided command or default to run_pipeline.py
+if [ $# -eq 0 ]; then
+    exec python3 /app/scripts/etl/run_pipeline.py
+else
+    exec "$@"
+fi
