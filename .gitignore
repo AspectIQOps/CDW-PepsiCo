@@ -30,9 +30,6 @@ ENV/
 *.swp
 *.swo
 
-#Temp Documentation
-# docs/ - REMOVED: We need to track documentation!
-
 #old stuff
 OLD/
 Archive/
