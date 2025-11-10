@@ -32,6 +32,7 @@ ENV/
 
 #Temp Documentation
 #docs/
+QUICKSTART.md
 
 #old stuff
 OLD/
