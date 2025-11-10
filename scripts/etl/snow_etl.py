@@ -18,7 +18,11 @@ SN_CLIENT_SECRET = os.getenv('SN_CLIENT_SECRET')
 SN_USER = os.getenv('SN_USER')
 SN_PASS = os.getenv('SN_PASS')
 SN_BASE_URL = f"https://{SN_INSTANCE}.service-now.com/api/now/table"
-SN_TOKEN_URL = f"https://{SN_INSTANCE}.service-now.com/oauth_token.do"
+# Try multiple OAuth endpoints (different ServiceNow versions/configs use different endpoints)
+SN_TOKEN_URLS = [
+    f"https://{SN_INSTANCE}.service-now.com/oauth_token.do",
+    f"https://{SN_INSTANCE}.service-now.com/oauth/token"
+]
 
 # Global token cache
 _access_token = None
@@ -41,45 +45,88 @@ def get_oauth_token():
         return _access_token
 
     print("Fetching new OAuth token from ServiceNow...")
-    print(f"Token URL: {SN_TOKEN_URL}")
     print(f"Client ID: {SN_CLIENT_ID[:10]}..." if SN_CLIENT_ID else "Client ID: None")
 
-    payload = {
-        'grant_type': 'client_credentials',
-        'client_id': SN_CLIENT_ID,
-        'client_secret': SN_CLIENT_SECRET
-    }
+    # Try different OAuth configurations
+    configurations = [
+        # Config 1: Standard OAuth with form data
+        {
+            'url': SN_TOKEN_URLS[0],
+            'data': {
+                'grant_type': 'client_credentials',
+                'client_id': SN_CLIENT_ID,
+                'client_secret': SN_CLIENT_SECRET
+            },
+            'auth': None,
+            'headers': {'Content-Type': 'application/x-www-form-urlencoded'}
+        },
+        # Config 2: OAuth with Basic Auth (client_id:client_secret)
+        {
+            'url': SN_TOKEN_URLS[0],
+            'data': {'grant_type': 'client_credentials'},
+            'auth': HTTPBasicAuth(SN_CLIENT_ID, SN_CLIENT_SECRET),
+            'headers': {'Content-Type': 'application/x-www-form-urlencoded'}
+        },
+        # Config 3: Alternative endpoint with form data
+        {
+            'url': SN_TOKEN_URLS[1],
+            'data': {
+                'grant_type': 'client_credentials',
+                'client_id': SN_CLIENT_ID,
+                'client_secret': SN_CLIENT_SECRET
+            },
+            'auth': None,
+            'headers': {'Content-Type': 'application/x-www-form-urlencoded'}
+        },
+        # Config 4: Alternative endpoint with Basic Auth
+        {
+            'url': SN_TOKEN_URLS[1],
+            'data': {'grant_type': 'client_credentials'},
+            'auth': HTTPBasicAuth(SN_CLIENT_ID, SN_CLIENT_SECRET),
+            'headers': {'Content-Type': 'application/x-www-form-urlencoded'}
+        }
+    ]
 
-    try:
-        response = requests.post(SN_TOKEN_URL, data=payload, timeout=30)
+    last_error = None
+    for i, config in enumerate(configurations, 1):
+        try:
+            print(f"Attempt {i}/4: Trying {config['url']} with {'Basic Auth' if config['auth'] else 'form credentials'}")
+            response = requests.post(
+                config['url'],
+                data=config['data'],
+                auth=config['auth'],
+                headers=config['headers'],
+                timeout=30
+            )
 
-        # Debug output
-        print(f"Token Response Status: {response.status_code}")
-        if response.status_code != 200:
-            print(f"Token Response Body: {response.text[:500]}")
+            print(f"  Response Status: {response.status_code}")
 
-        response.raise_for_status()
-        token_data = response.json()
+            if response.status_code == 200:
+                token_data = response.json()
 
-        if 'access_token' not in token_data:
-            print(f"ERROR: No access_token in response. Got keys: {token_data.keys()}")
-            raise ValueError("No access_token in OAuth response")
+                if 'access_token' not in token_data:
+                    print(f"  ERROR: No access_token in response. Got keys: {token_data.keys()}")
+                    continue
 
-        _access_token = token_data['access_token']
-        # Set expiry with 60 second buffer
-        expires_in = token_data.get('expires_in', 3600)
-        _token_expiry = datetime.now().timestamp() + expires_in - 60
+                _access_token = token_data['access_token']
+                expires_in = token_data.get('expires_in', 3600)
+                _token_expiry = datetime.now().timestamp() + expires_in - 60
 
-        print(f"✓ OAuth token obtained (expires in {expires_in}s)")
-        return _access_token
+                print(f"✓ OAuth token obtained (expires in {expires_in}s)")
+                return _access_token
+            else:
+                print(f"  Response: {response.text[:200]}")
+                last_error = f"Status {response.status_code}: {response.text[:200]}"
 
-    except requests.exceptions.HTTPError as e:
-        print(f"ERROR: OAuth token request failed with status {e.response.status_code}")
-        print(f"Response: {e.response.text[:500]}")
-        raise
-    except Exception as e:
-        print(f"ERROR: Failed to get OAuth token: {e}")
-        raise
+        except Exception as e:
+            print(f"  Failed: {str(e)[:100]}")
+            last_error = str(e)
+            continue
+
+    # All attempts failed
+    error_msg = f"All OAuth token attempts failed. Last error: {last_error}"
+    print(f"ERROR: {error_msg}")
+    raise ValueError(error_msg)
 
 def get_auth_headers():
     """Get authentication headers - OAuth or Basic Auth"""
