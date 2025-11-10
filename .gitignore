@@ -31,7 +31,7 @@ ENV/
 *.swo
 
 #Temp Documentation
-docs/
+# docs/ - REMOVED: We need to track documentation!
 
 #old stuff
 OLD/
