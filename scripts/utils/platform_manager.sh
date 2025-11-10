@@ -36,29 +36,27 @@ show_header() {
 }
 
 show_usage() {
-    cat << EOF
-${CYAN}Analytics Platform Manager${NC}
-
-${YELLOW}Usage:${NC}
-  ./platform_manager.sh [command]
-
-${YELLOW}Commands:${NC}
-  ${GREEN}start${NC}      - Start the ETL pipeline
-  ${GREEN}stop${NC}       - Stop all containers
-  ${GREEN}restart${NC}    - Restart the pipeline
-  ${GREEN}status${NC}     - Show system status
-  ${GREEN}health${NC}     - Run health checks
-  ${GREEN}validate${NC}   - Validate data quality
-  ${GREEN}logs${NC}       - Show container logs and follow
-  ${GREEN}clean${NC}      - Clean up containers and logs
-  ${GREEN}db${NC}         - Connect to database
-  ${GREEN}ssm${NC}        - List SSM parameters
-
-${YELLOW}Examples:${NC}
-  ./platform_manager.sh start
-  ./platform_manager.sh status
-  ./platform_manager.sh logs
-EOF
+    echo -e "${CYAN}Analytics Platform Manager${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo "  ./platform_manager.sh [command]"
+    echo ""
+    echo -e "${YELLOW}Commands:${NC}"
+    echo -e "  ${GREEN}start${NC}      - Start the ETL pipeline"
+    echo -e "  ${GREEN}stop${NC}       - Stop all containers"
+    echo -e "  ${GREEN}restart${NC}    - Restart the pipeline"
+    echo -e "  ${GREEN}status${NC}     - Show system status"
+    echo -e "  ${GREEN}health${NC}     - Run health checks"
+    echo -e "  ${GREEN}validate${NC}   - Validate data quality"
+    echo -e "  ${GREEN}logs${NC}       - Show container logs and follow"
+    echo -e "  ${GREEN}clean${NC}      - Clean up containers and logs"
+    echo -e "  ${GREEN}db${NC}         - Connect to database"
+    echo -e "  ${GREEN}ssm${NC}        - List SSM parameters"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  ./platform_manager.sh start"
+    echo "  ./platform_manager.sh status"
+    echo "  ./platform_manager.sh logs"
 }
 
 get_ssm_param() {
