@@ -102,7 +102,17 @@ def get_oauth_token():
             print(f"  Response Status: {response.status_code}")
 
             if response.status_code == 200:
-                token_data = response.json()
+                # Debug: show raw response
+                print(f"  Response Content-Type: {response.headers.get('Content-Type', 'unknown')}")
+                print(f"  Response Body (first 200 chars): {response.text[:200]}")
+
+                try:
+                    token_data = response.json()
+                except Exception as json_err:
+                    print(f"  ERROR: Failed to parse JSON: {json_err}")
+                    print(f"  Full response text: {response.text}")
+                    last_error = f"Invalid JSON response: {response.text[:200]}"
+                    continue
 
                 if 'access_token' not in token_data:
                     print(f"  ERROR: No access_token in response. Got keys: {token_data.keys()}")
@@ -130,26 +140,31 @@ def get_oauth_token():
 
 def get_auth_headers():
     """Get authentication headers - OAuth or Basic Auth"""
+    # Try OAuth first if credentials available
     if SN_CLIENT_ID and SN_CLIENT_SECRET:
-        # Use OAuth 2.0
-        token = get_oauth_token()
-        return {
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/json'
-        }
-    elif SN_USER and SN_PASS:
-        # Use Basic Auth (legacy)
-        return {'Accept': 'application/json'}
-    else:
-        raise ValueError("No ServiceNow authentication credentials available")
+        try:
+            token = get_oauth_token()
+            return {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json'
+            }
+        except Exception as e:
+            print(f"⚠ OAuth failed: {str(e)[:100]}")
+            print("  Falling back to Basic Auth with client_id as username...")
+            # Fall through to basic auth
+
+    # Use basic auth (legacy or fallback)
+    return {'Accept': 'application/json'}
 
 def get_auth():
     """Get authentication object for requests"""
+    # Priority 1: Try client_id/secret as username/password (some orgs use this pattern)
     if SN_CLIENT_ID and SN_CLIENT_SECRET:
-        # OAuth uses headers only, no auth parameter
-        return None
+        print("Using client_id/secret as Basic Auth credentials")
+        return HTTPBasicAuth(SN_CLIENT_ID, SN_CLIENT_SECRET)
+    # Priority 2: Traditional username/password
     elif SN_USER and SN_PASS:
-        # Basic auth
+        print("Using username/password for Basic Auth")
         return HTTPBasicAuth(SN_USER, SN_PASS)
     else:
         return None

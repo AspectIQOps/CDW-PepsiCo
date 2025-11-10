@@ -306,7 +306,128 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
 );
 
 -- ========================================
--- 8. SEED DIMENSION DATA
+-- 8. ADDITIONAL SOW-REQUIRED TABLES
+-- ========================================
+
+-- Time Dimension (SoW Section 2.5.3)
+CREATE TABLE IF NOT EXISTS time_dim (
+    time_id SERIAL PRIMARY KEY,
+    date_value DATE UNIQUE NOT NULL,
+    year INTEGER NOT NULL,
+    quarter INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    month_name VARCHAR(20) NOT NULL,
+    week INTEGER NOT NULL,
+    day_of_month INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL,
+    day_name VARCHAR(20) NOT NULL,
+    is_weekend BOOLEAN NOT NULL,
+    is_holiday BOOLEAN DEFAULT FALSE,
+    fiscal_year INTEGER,
+    fiscal_quarter INTEGER,
+    fiscal_period INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_time_date ON time_dim(date_value);
+CREATE INDEX IF NOT EXISTS idx_time_ym ON time_dim(year, month);
+
+-- Manual Mapping Overrides (SoW Section 2.5.3 - H-code overrides)
+CREATE TABLE IF NOT EXISTS mapping_overrides (
+    override_id SERIAL PRIMARY KEY,
+    app_id INTEGER REFERENCES applications_dim(app_id) ON DELETE CASCADE,
+    override_type VARCHAR(50) NOT NULL, -- 'h_code', 'owner', 'sector', 'architecture'
+    field_name VARCHAR(100) NOT NULL,
+    override_value VARCHAR(255) NOT NULL,
+    reason TEXT,
+    created_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_override_app ON mapping_overrides(app_id);
+CREATE INDEX IF NOT EXISTS idx_override_type ON mapping_overrides(override_type, is_active);
+
+COMMENT ON TABLE mapping_overrides IS 'Manual overrides for H-codes and other fields when CMDB data is missing or incorrect';
+
+-- Forecast Models Configuration (SoW Section 2.5.3)
+CREATE TABLE IF NOT EXISTS forecast_models (
+    model_id SERIAL PRIMARY KEY,
+    model_name VARCHAR(100) UNIQUE NOT NULL,
+    model_type VARCHAR(50) NOT NULL, -- 'linear', 'exponential', 'seasonal', 'arima'
+    is_active BOOLEAN DEFAULT TRUE,
+    confidence_level DECIMAL(5,2) DEFAULT 95.00, -- e.g., 95% confidence interval
+    parameters JSONB, -- Model-specific parameters
+    description TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO forecast_models (model_name, model_type, parameters, description) VALUES
+    ('Linear Trend', 'linear', '{"min_data_points": 7, "projection_periods": 12}', 'Simple linear regression forecast'),
+    ('Exponential Smoothing', 'exponential', '{"alpha": 0.3, "beta": 0.1, "projection_periods": 12}', 'Double exponential smoothing'),
+    ('Seasonal ARIMA', 'seasonal', '{"period": 12, "p": 1, "d": 1, "q": 1}', 'Seasonal ARIMA model')
+ON CONFLICT (model_name) DO NOTHING;
+
+-- Data Lineage (SoW Section 2.5.3 - Full audit trail)
+CREATE TABLE IF NOT EXISTS data_lineage (
+    lineage_id SERIAL PRIMARY KEY,
+    source_system VARCHAR(50) NOT NULL, -- 'appdynamics', 'servicenow', 'manual'
+    source_table VARCHAR(100),
+    source_record_id VARCHAR(255),
+    target_table VARCHAR(100) NOT NULL,
+    target_record_id INTEGER,
+    operation VARCHAR(20) NOT NULL, -- 'insert', 'update', 'delete', 'merge'
+    run_id UUID REFERENCES audit_etl_runs(run_id),
+    execution_id INTEGER REFERENCES etl_execution_log(run_id),
+    field_changes JSONB, -- Before/after values for updates
+    transform_applied VARCHAR(255),
+    processed_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lineage_source ON data_lineage(source_system, source_table);
+CREATE INDEX IF NOT EXISTS idx_lineage_target ON data_lineage(target_table, target_record_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_run ON data_lineage(run_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_time ON data_lineage(processed_at DESC);
+
+COMMENT ON TABLE data_lineage IS 'Complete audit trail tracking data flow from source systems to analytics database';
+
+-- User Actions (SoW Section 2.5.3 - Administrative changes)
+CREATE TABLE IF NOT EXISTS user_actions (
+    action_id SERIAL PRIMARY KEY,
+    user_name VARCHAR(100) NOT NULL,
+    user_email VARCHAR(255),
+    action_type VARCHAR(50) NOT NULL, -- 'price_update', 'mapping_override', 'config_change', 'manual_correction'
+    target_table VARCHAR(100),
+    target_record_id INTEGER,
+    action_details JSONB NOT NULL, -- What changed
+    reason TEXT,
+    ip_address VARCHAR(50),
+    performed_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_user ON user_actions(user_name);
+CREATE INDEX IF NOT EXISTS idx_action_type ON user_actions(action_type);
+CREATE INDEX IF NOT EXISTS idx_action_time ON user_actions(performed_at DESC);
+
+COMMENT ON TABLE user_actions IS 'Audit log of all administrative changes made through dashboard or manual scripts';
+
+-- ========================================
+-- 9. ALTER EXISTING TABLES (SoW Requirements)
+-- ========================================
+
+-- Add license_tier to applications_dim for Peak vs. Pro tracking
+ALTER TABLE applications_dim
+ADD COLUMN IF NOT EXISTS license_tier VARCHAR(20) CHECK (license_tier IN ('Peak', 'Pro', 'Unknown'));
+
+COMMENT ON COLUMN applications_dim.license_tier IS 'AppDynamics license tier - Peak or Pro (SoW Section 2.1)';
+
+-- Add tier metadata to license_usage_fact if not exists
+-- (already exists in schema, just adding comment for clarity)
+COMMENT ON COLUMN license_usage_fact.tier IS 'License tier: Peak or Pro';
+
+-- ========================================
+-- 10. SEED DIMENSION DATA
 -- ========================================
 
 -- Seed owners
@@ -356,7 +477,7 @@ INSERT INTO price_config (capability_id, tier, unit_rate, start_date) VALUES
 ON CONFLICT (capability_id, tier, start_date) DO NOTHING;
 
 -- ========================================
--- 9. GRANT PERMISSIONS
+-- 11. GRANT PERMISSIONS
 -- ========================================
 
 -- ETL user gets all privileges
@@ -372,7 +493,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO etl_analytic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO grafana_ro;
 
 -- ========================================
--- 10. VERIFICATION
+-- 12. VERIFICATION
 -- ========================================
 
 DO $$

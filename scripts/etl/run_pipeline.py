@@ -47,12 +47,66 @@ def run_etl_script(script_name, description):
         print(f"{Colors.RED}❌ {description} failed: {str(e)}{Colors.NC}")
         return False
 
+def validate_credentials():
+    """Validate all required credentials are available"""
+    print(f"{Colors.YELLOW}Validating credentials...{Colors.NC}")
+
+    missing = []
+    warnings = []
+
+    # Database credentials (required)
+    db_creds = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
+    for cred in db_creds:
+        if not os.getenv(cred):
+            missing.append(f"Database: {cred}")
+
+    # ServiceNow credentials (at least one auth method required)
+    sn_oauth = os.getenv('SN_CLIENT_ID') and os.getenv('SN_CLIENT_SECRET')
+    sn_basic = os.getenv('SN_USER') and os.getenv('SN_PASS')
+    sn_instance = os.getenv('SN_INSTANCE')
+
+    if not sn_instance:
+        warnings.append("ServiceNow: SN_INSTANCE not configured (will skip ServiceNow ETL)")
+    elif not (sn_oauth or sn_basic):
+        warnings.append("ServiceNow: No authentication method available (need OAuth or Basic Auth)")
+
+    # AppDynamics credentials (optional for now, since appd_etl uses mock data)
+    appd_complete = (os.getenv('APPD_CONTROLLER') and os.getenv('APPD_ACCOUNT')
+                     and os.getenv('APPD_CLIENT_ID') and os.getenv('APPD_CLIENT_SECRET'))
+
+    if not appd_complete:
+        warnings.append("AppDynamics: Credentials incomplete (using mock data)")
+
+    # Print results
+    if missing:
+        print(f"{Colors.RED}✗ Missing required credentials:{Colors.NC}")
+        for item in missing:
+            print(f"  - {item}")
+        return False
+
+    if warnings:
+        print(f"{Colors.YELLOW}⚠ Warnings:{Colors.NC}")
+        for item in warnings:
+            print(f"  - {item}")
+
+    print(f"{Colors.GREEN}✓ Core credentials validated{Colors.NC}")
+    return True
+
 def main():
     """Main pipeline orchestration"""
     log_step("Starting ETL Pipeline", Colors.BLUE)
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
-    
+
+    # Validate credentials before starting
+    if not validate_credentials():
+        log_step("Pipeline Aborted - Missing Required Credentials", Colors.RED)
+        print(f"\n{Colors.RED}Please ensure all required credentials are loaded via entrypoint.sh{Colors.NC}")
+        print(f"{Colors.RED}Or set them in AWS SSM Parameter Store at /pepsico/*{Colors.NC}\n")
+        sys.exit(1)
+
+    print()
+
     # Define pipeline steps
     pipeline_steps = [
         ("snow_etl.py", "ServiceNow CMDB Extraction"),
