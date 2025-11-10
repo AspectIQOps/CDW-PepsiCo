@@ -31,8 +31,7 @@ ENV/
 *.swo
 
 #Temp Documentation
-#docs/
-QUICKSTART.md
+docs/
 
 #old stuff
 OLD/
