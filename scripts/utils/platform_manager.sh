@@ -36,6 +36,7 @@ show_header() {
 }
 
 show_usage() {
+    cat << EOF
 ${CYAN}Analytics Platform Manager${NC}
 
 ${YELLOW}Usage:${NC}
@@ -57,6 +58,7 @@ ${YELLOW}Examples:${NC}
   ./platform_manager.sh start
   ./platform_manager.sh status
   ./platform_manager.sh logs
+EOF
 }
 
 get_ssm_param() {
