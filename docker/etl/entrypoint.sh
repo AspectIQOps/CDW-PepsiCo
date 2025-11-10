@@ -121,6 +121,20 @@ export SN_INSTANCE=$(aws ssm get-parameter \
     --query 'Parameter.Value' \
     --output text 2>/dev/null || echo "")
 
+export SN_CLIENT_ID=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/servicenow/CLIENT_ID" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+export SN_CLIENT_SECRET=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/servicenow/CLIENT_SECRET" \
+    --with-decryption \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
+# Legacy: Try username/password if OAuth not available
 export SN_USER=$(aws ssm get-parameter \
     --name "${SSM_PREFIX}/servicenow/USER" \
     --region ${AWS_REGION} \
@@ -137,7 +151,15 @@ export SN_PASS=$(aws ssm get-parameter \
 if [ -n "$SN_INSTANCE" ]; then
     echo -e "${GREEN}✓ ServiceNow credentials retrieved${NC}"
     echo "  Instance: $SN_INSTANCE"
-    echo "  User: $SN_USER"
+    if [ -n "$SN_CLIENT_ID" ]; then
+        echo "  Auth Method: OAuth 2.0 (Client Credentials)"
+        echo "  Client ID: $SN_CLIENT_ID"
+    elif [ -n "$SN_USER" ]; then
+        echo "  Auth Method: Basic Auth (Legacy)"
+        echo "  User: $SN_USER"
+    else
+        echo -e "${RED}  ERROR: No authentication credentials found${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠ ServiceNow credentials not found (skipping)${NC}"
 fi
