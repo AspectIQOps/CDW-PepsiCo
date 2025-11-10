@@ -50,12 +50,12 @@ class AuditLogger:
             self.should_close = True
     
     def _create_connection(self):
-        """Create database connection from environment variables."""
+        """Create database connection from environment variables loaded by entrypoint.sh."""
         try:
             self.conn = psycopg2.connect(
                 host=os.getenv('DB_HOST'),
-                database=os.getenv('DB_NAME', 'appd_licensing'),
-                user=os.getenv('DB_USER', 'appd_ro'),
+                database=os.getenv('DB_NAME'),
+                user=os.getenv('DB_USER'),
                 password=os.getenv('DB_PASSWORD'),
                 port=os.getenv('DB_PORT', 5432)
             )

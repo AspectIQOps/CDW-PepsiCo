@@ -5,11 +5,11 @@ from datetime import datetime
 import os, time, requests
 from requests.auth import HTTPBasicAuth
 
-# Configuration
-DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'cost_analytics_db')
-DB_USER = os.getenv('DB_USER', 'etl_analytics')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
+# Configuration - credentials loaded from SSM via entrypoint.sh
+DB_HOST = os.getenv('DB_HOST')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 SN_INSTANCE = os.getenv('SN_INSTANCE')
 SN_USER = os.getenv('SN_USER')
 SN_PASS = os.getenv('SN_PASS')

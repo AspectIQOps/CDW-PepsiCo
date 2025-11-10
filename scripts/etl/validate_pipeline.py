@@ -3,10 +3,11 @@
 import psycopg2
 import os
 
-DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'cost_analytics_db')
-DB_USER = os.getenv('DB_USER', 'etl_analytics')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
+# Configuration - credentials loaded from SSM via entrypoint.sh
+DB_HOST = os.getenv('DB_HOST')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 def validate_pipeline():
     conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
