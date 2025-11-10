@@ -204,7 +204,7 @@ echo ""
 echo -e "${YELLOW}Step 7: Building Docker image...${NC}"
 
 cd "$PROJECT_DIR"
-sudo docker compose -f docker-compose.ec2.yaml build
+sudo docker compose -f docker-compose.yaml build
 
 echo -e "${GREEN}✓ Docker image built${NC}"
 echo ""

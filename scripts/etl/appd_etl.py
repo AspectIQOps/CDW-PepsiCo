@@ -7,11 +7,11 @@ import random
 import sys
 from datetime import datetime, timedelta
 
-# Configuration
-DB_HOST = os.getenv('DB_HOST', 'postgres')
-DB_NAME = os.getenv('DB_NAME', 'appd_licensing')
-DB_USER = os.getenv('DB_USER', 'appd_ro')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'appd_pass')
+# Configuration - credentials loaded from SSM via entrypoint.sh
+DB_HOST = os.getenv('DB_HOST')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 MOCK_END = datetime.now()
 MOCK_START = MOCK_END - timedelta(days=90)
