@@ -143,6 +143,17 @@ for rel in all_child_rels:
 
 # Step 4: Check for common relationship types
 print(f"\n4. Testing specific relationship types for ALL applications...")
+print(f"   (Using first 100 application sys_ids to test queries)")
+
+# Get list of app sys_ids to test with
+app_sys_ids = [app['sys_id'] for app in apps]
+if len(apps) < 5:
+    # Get more apps for testing
+    more_apps = query_snow('cmdb_ci_service', ['sys_id'], 
+                          query='install_status=1^operational_status=1', limit=100)
+    app_sys_ids = [app['sys_id'] for app in more_apps]
+
+print(f"   Testing with {len(app_sys_ids)} application IDs")
 
 test_types = [
     'Hosted on::Hosts',
@@ -152,36 +163,46 @@ test_types = [
     'Contains::Contained by'
 ]
 
+best_query = None
+best_count = 0
+
 for rel_type in test_types:
     print(f"\n   Testing: {rel_type}")
     try:
-        # Try different query syntaxes
-        queries = [
-            f'type.name={rel_type}',
-            f'type={rel_type}',
-            f'type.display_value={rel_type}'
-        ]
+        # Test the query that ETL will actually use
+        batch = app_sys_ids[:50]  # Test with first 50
+        query = f"type.name={rel_type}^parentIN{','.join(batch)}"
         
-        for i, query in enumerate(queries, 1):
-            try:
-                rels = query_snow('cmdb_rel_ci', ['parent', 'child', 'type'], 
-                                query=query, limit=5)
-                if rels:
-                    print(f"   ✅ Query syntax {i} works: Found {len(rels)} relationships")
-                    print(f"      Query: {query}")
-                    for rel in rels[:2]:
-                        parent = rel.get('parent', {})
-                        child = rel.get('child', {})
-                        parent_val = parent.get('display_value') if isinstance(parent, dict) else parent
-                        child_val = child.get('display_value') if isinstance(child, dict) else child
-                        print(f"      Sample: {parent_val} → {child_val}")
-                    break
-                else:
-                    print(f"   ⚠️  Query syntax {i} returned 0 results")
-            except Exception as e:
-                print(f"   ❌ Query syntax {i} failed: {str(e)[:100]}")
+        print(f"   Query: {query[:100]}...")
+        rels = query_snow('cmdb_rel_ci', ['parent', 'child', 'type'], 
+                        query=query, limit=10)
+        
+        if rels:
+            print(f"   ✅ Found {len(rels)} relationships with this type!")
+            
+            # Extract actual sys_id values (not display values)
+            for rel in rels[:3]:
+                parent = rel.get('parent', {})
+                child = rel.get('child', {})
+                
+                # ServiceNow returns references as objects with 'value' and 'link'
+                parent_id = parent.get('value') if isinstance(parent, dict) else parent
+                child_id = child.get('value') if isinstance(child, dict) else child
+                
+                print(f"      Sample: parent={parent_id[:20]}... child={child_id[:20] if child_id else 'None'}...")
+            
+            if len(rels) > best_count:
+                best_count = len(rels)
+                best_query = rel_type
+        else:
+            print(f"   ⚠️  Query returned 0 results for these applications")
+            
     except Exception as e:
-        print(f"   ❌ Error: {str(e)[:100]}")
+        print(f"   ❌ Error: {str(e)[:200]}")
+
+if best_query:
+    print(f"\n   🎯 BEST MATCH: '{best_query}' returned {best_count} relationships")
+    print(f"   Use this in your snow_etl.py queries!")
 
 # Step 5: Get relationship type statistics
 print(f"\n5. Getting relationship type statistics (top 10)...")
@@ -205,7 +226,12 @@ print("\n" + "="*80)
 print("RECOMMENDATIONS:")
 print("="*80)
 
-if all_parent_rels or all_child_rels:
+if best_query and best_count > 0:
+    print(f"✅ FOUND WORKING RELATIONSHIP TYPE: '{best_query}'")
+    print(f"   This returned {best_count} relationships when queried with your applications")
+    print(f"\n   Update your snow_etl.py to use:")
+    print(f"   query = f\"type.name={best_query}^parentIN{{','.join(batch)}}\"")
+elif all_parent_rels or all_child_rels:
     print("✅ Your application has relationships in CMDB")
     print("   Use the relationship types shown above in your ETL query")
 else:
@@ -213,10 +239,16 @@ else:
     print("   This could mean:")
     print("   1. Applications don't link to servers in your CMDB")
     print("   2. Relationships use a different CI type (not cmdb_ci_service)")
-    print("   3. You may need to query from the server side instead")
+    print("   3. The sample applications chosen don't have relationships")
+    print("   4. You may need to query from the server side instead")
 
 print("\nNext steps:")
-print("1. Review the relationship types found above")
-print("2. Update snow_etl.py to use the correct relationship type")
-print("3. Consider whether you need to query from child (server) perspective")
+if best_query:
+    print(f"1. Use '{best_query}' as your relationship type in snow_etl.py")
+    print("2. The query syntax is correct: type.name=X^parentINY")
+    print("3. Re-run your ETL pipeline")
+else:
+    print("1. Try querying from the server side (child → parent)")
+    print("2. Check if your apps use a different CI class")
+    print("3. Verify relationships exist in ServiceNow UI")
 print("="*80)
