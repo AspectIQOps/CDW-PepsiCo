@@ -72,6 +72,28 @@ def reconcile_applications(conn):
             
             # FIXED APPROACH: Update the AppD record with ServiceNow enrichment data
             # This keeps the appd_application_id unique and adds ServiceNow metadata
+            
+            # First, check if this sn_sys_id is already assigned to another app
+            cursor.execute("""
+                SELECT app_id, appd_application_name 
+                FROM applications_dim 
+                WHERE sn_sys_id = %s AND app_id != %s
+            """, (snow_sys_id, appd_id))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Another AppD app already claimed this ServiceNow record
+                # Log this as a conflict and skip
+                print(f"   ⚠️  Conflict: {appd_name} matches {snow_name}, but already matched to {existing[1]}")
+                cursor.execute("""
+                    INSERT INTO reconciliation_log 
+                    (source_a, source_b, match_key_a, match_key_b, confidence_score, match_status, notes)
+                    VALUES ('AppDynamics', 'ServiceNow', %s, %s, %s, 'conflict', %s)
+                """, (appd_name, snow_name, best_score, 
+                      f"ServiceNow app already matched to {existing[1]}"))
+                continue
+            
+            # Safe to update - no conflict
             cursor.execute("""
                 UPDATE applications_dim 
                 SET sn_sys_id = %s,
