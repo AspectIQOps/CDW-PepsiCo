@@ -21,6 +21,12 @@ def get_oauth_token():
     response = requests.post(url, data=data, timeout=30)
     return response.json()['access_token']
 
+def extract_sys_id(item):
+    """Extract sys_id from either string or dict format"""
+    if isinstance(item, dict):
+        return item.get('value') or item.get('sys_id')
+    return item
+
 def query_snow(table, fields, query=None, limit=10):
     token = get_oauth_token()
     params = {
@@ -46,7 +52,8 @@ print("="*80)
 print("\n1. Getting sample applications...")
 apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
                   query='install_status=1^operational_status=1', limit=100)
-app_sys_ids = [app['sys_id'] for app in apps]
+# Extract sys_ids properly
+app_sys_ids = [extract_sys_id(app['sys_id']) for app in apps]
 print(f"   Found {len(apps)} applications")
 
 # Get relationships
@@ -64,11 +71,7 @@ if not rels:
 print("\n3. Analyzing child objects (what apps depend on)...")
 child_sys_ids = []
 for rel in rels:
-    child = rel.get('child', {})
-    if isinstance(child, dict):
-        child_id = child.get('value')
-    else:
-        child_id = child
+    child_id = extract_sys_id(rel.get('child'))
     if child_id:
         child_sys_ids.append(child_id)
 
@@ -84,10 +87,10 @@ for i in range(0, len(child_sys_ids[:10]), 10):
     if servers:
         print(f"   ✅ Found {len(servers)} SERVERS:")
         for s in servers[:5]:
-            name = s.get('name', 'N/A')
+            name = s.get('name', {})
             if isinstance(name, dict):
                 name = name.get('display_value', 'N/A')
-            sys_class = s.get('sys_class_name', 'N/A')
+            sys_class = s.get('sys_class_name', {})
             if isinstance(sys_class, dict):
                 sys_class = sys_class.get('display_value', 'N/A')
             print(f"      - {name} (class: {sys_class})")
@@ -101,7 +104,7 @@ for i in range(0, len(child_sys_ids[:10]), 10):
     if services:
         print(f"   ✅ Found {len(services)} APPLICATIONS:")
         for s in services[:5]:
-            name = s.get('name', 'N/A')
+            name = s.get('name', {})
             if isinstance(name, dict):
                 name = name.get('display_value', 'N/A')
             print(f"      - {name}")
@@ -116,7 +119,7 @@ for i in range(0, len(child_sys_ids[:10]), 10):
         if dbs:
             print(f"   ✅ Found {len(dbs)} DATABASES:")
             for d in dbs[:5]:
-                name = d.get('name', 'N/A')
+                name = d.get('name', {})
                 if isinstance(name, dict):
                     name = name.get('display_value', 'N/A')
                 print(f"      - {name}")
