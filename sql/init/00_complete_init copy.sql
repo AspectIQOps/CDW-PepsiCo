@@ -157,9 +157,7 @@ CREATE TABLE IF NOT EXISTS applications_dim (
     owner_id INTEGER REFERENCES owners_dim(owner_id),
     sector_id INTEGER REFERENCES sectors_dim(sector_id),
     architecture_id INTEGER REFERENCES architecture_dim(architecture_id),
-    license_tier VARCHAR(20) CHECK (license_tier IN ('Peak', 'Pro', 'Unknown')),
     support_group VARCHAR(255),
-    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -168,9 +166,6 @@ CREATE INDEX IF NOT EXISTS idx_apps_appd_name ON applications_dim(appd_applicati
 CREATE INDEX IF NOT EXISTS idx_apps_sn_name ON applications_dim(sn_service_name);
 CREATE INDEX IF NOT EXISTS idx_apps_owner ON applications_dim(owner_id);
 CREATE INDEX IF NOT EXISTS idx_apps_sector ON applications_dim(sector_id);
-
-COMMENT ON COLUMN applications_dim.license_tier IS 'AppDynamics license tier - Peak or Pro (SoW Section 2.1)';
-COMMENT ON COLUMN applications_dim.metadata IS 'Additional application data from AppDynamics: tier_count, node_count, description, etc.';
 
 -- Application-Server Mapping
 CREATE TABLE IF NOT EXISTS app_server_mapping (
@@ -418,7 +413,21 @@ CREATE INDEX IF NOT EXISTS idx_action_time ON user_actions(performed_at DESC);
 COMMENT ON TABLE user_actions IS 'Audit log of all administrative changes made through dashboard or manual scripts';
 
 -- ========================================
--- 9. SEED DIMENSION DATA
+-- 9. ALTER EXISTING TABLES (SoW Requirements)
+-- ========================================
+
+-- Add license_tier to applications_dim for Peak vs. Pro tracking
+ALTER TABLE applications_dim
+ADD COLUMN IF NOT EXISTS license_tier VARCHAR(20) CHECK (license_tier IN ('Peak', 'Pro', 'Unknown'));
+
+COMMENT ON COLUMN applications_dim.license_tier IS 'AppDynamics license tier - Peak or Pro (SoW Section 2.1)';
+
+-- Add tier metadata to license_usage_fact if not exists
+-- (already exists in schema, just adding comment for clarity)
+COMMENT ON COLUMN license_usage_fact.tier IS 'License tier: Peak or Pro';
+
+-- ========================================
+-- 10. SEED DIMENSION DATA
 -- ========================================
 
 -- Seed owners
@@ -459,16 +468,16 @@ ON CONFLICT (capability_code) DO NOTHING;
 
 -- Seed price configuration (example rates)
 INSERT INTO price_config (capability_id, tier, unit_rate, start_date) VALUES
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'APM'), 'Peak', 0.75, '2024-01-01'),
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'APM'), 'Pro', 0.50, '2024-01-01'),
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'MRUM'), 'Peak', 0.60, '2024-01-01'),
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'MRUM'), 'Pro', 0.40, '2024-01-01'),
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'BRUM'), 'Peak', 0.55, '2024-01-01'),
-    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'BRUM'), 'Pro', 0.35, '2024-01-01')
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'APM'), 'PEAK', 0.75, '2024-01-01'),
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'APM'), 'PRO', 0.50, '2024-01-01'),
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'MRUM'), 'PEAK', 0.60, '2024-01-01'),
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'MRUM'), 'PRO', 0.40, '2024-01-01'),
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'BRUM'), 'PEAK', 0.55, '2024-01-01'),
+    ((SELECT capability_id FROM capabilities_dim WHERE capability_code = 'BRUM'), 'PRO', 0.35, '2024-01-01')
 ON CONFLICT (capability_id, tier, start_date) DO NOTHING;
 
 -- ========================================
--- 10. GRANT PERMISSIONS
+-- 11. GRANT PERMISSIONS
 -- ========================================
 
 -- ETL user gets all privileges
@@ -484,7 +493,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO etl_analytic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO grafana_ro;
 
 -- ========================================
--- 11. VERIFICATION
+-- 12. VERIFICATION
 -- ========================================
 
 DO $$
