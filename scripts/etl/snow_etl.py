@@ -41,20 +41,24 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
     all_records = []
     offset = 0
     batch_count = 0
+    start_time = datetime.now()
     
     while True:
         params = {
             "sysparm_fields": ','.join(fields),
             "sysparm_limit": limit,
             "sysparm_offset": offset,
-            "sysparm_exclude_reference_link": "true"
+            "sysparm_exclude_reference_link": "true",
+            "sysparm_no_count": "true"  # Speed optimization - don't count total records
         }
         if query:
             params["sysparm_query"] = query
         
         try:
+            batch_start = datetime.now()
             response = requests.get(base_url, headers=headers, params=params, timeout=60)
             response.raise_for_status()
+            batch_time = (datetime.now() - batch_start).total_seconds()
             
             records = response.json().get("result", [])
             if not records:
@@ -64,10 +68,17 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
             batch_count += 1
             
             # Progress update every batch
-            if batch_count % 5 == 0:
-                print(f"  ✓ Fetched {len(all_records)} records (batch {batch_count})...")
+            elapsed = (datetime.now() - start_time).total_seconds()
+            rate = len(all_records) / elapsed if elapsed > 0 else 0
+            if batch_count % 2 == 0:
+                print(f"  ✓ Fetched {len(all_records)} records ({rate:.0f} rec/sec, batch time: {batch_time:.1f}s)...")
             
             offset += limit
+            
+            # Safety check: if we've been running over 240 seconds, stop and process what we have
+            if elapsed > 240:
+                print(f"  ⚠️  Approaching timeout. Stopping fetch after {len(all_records)} records.")
+                break
             
         except requests.exceptions.Timeout:
             print(f"  ⚠️  Request timed out at offset {offset}. Continuing with {len(all_records)} collected records...")
@@ -79,19 +90,23 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
             print(f"  ❌ Unexpected error: {e}")
             break
     
-    print(f"  ✓ Retrieved total {len(all_records)} records in {batch_count} batches")
+    total_time = (datetime.now() - start_time).total_seconds()
+    print(f"  ✓ Retrieved {len(all_records)} records in {batch_count} batches ({total_time:.1f} seconds)")
     return all_records
 
 def get_applications(access_token, instance):
     """Fetch applications from ServiceNow CMDB"""
     print("Fetching ServiceNow applications (cmdb_ci_service)...")
     
+    # Only fetch operational applications, exclude test/dev environments where possible
+    query = "operational_status=1^ORoperational_status=2"  # 1=Operational, 2=In Planning
+    
     apps = query_snow_paginated(
         access_token, instance,
         table='cmdb_ci_service',
-        fields=['sys_id', 'name', 'short_description', 'owner', 'operational_status'],
-        query='operational_status=1',
-        limit=100
+        fields=['sys_id', 'name'],  # Only essential fields
+        query=query,
+        limit=250  # Larger page size = fewer requests
     )
     
     print(f"✓ Retrieved {len(apps)} applications")
@@ -199,12 +214,15 @@ def get_servers(access_token, instance):
     """Fetch servers from ServiceNow CMDB"""
     print("Fetching ServiceNow servers (cmdb_ci_server)...")
     
+    # Only fetch operational servers
+    query = "operational_status=1"
+    
     servers = query_snow_paginated(
         access_token, instance,
         table='cmdb_ci_server',
-        fields=['sys_id', 'name', 'os', 'operational_status', 'sys_class_name'],
-        query='operational_status=1',
-        limit=100
+        fields=['sys_id', 'name', 'os'],  # Only essential fields
+        query=query,
+        limit=250
     )
     
     print(f"✓ Retrieved {len(servers)} servers")
@@ -392,19 +410,31 @@ def main():
         print("STEP 1: Applications")
         print("-"*70)
         apps = get_applications(access_token, sn_instance)
-        upsert_applications_batched(conn, apps, batch_size=1000)
+        if not apps:
+            print("⚠️  No applications found. Continuing anyway...")
+        else:
+            upsert_applications_batched(conn, apps, batch_size=500)
         print()
         
         print("STEP 2: Servers")
         print("-"*70)
         servers = get_servers(access_token, sn_instance)
-        upsert_servers_batched(conn, servers, batch_size=1000)
+        if not servers:
+            print("⚠️  No servers found. Continuing anyway...")
+        else:
+            upsert_servers_batched(conn, servers, batch_size=500)
         print()
         
         print("STEP 3: Application-to-Server Relationships")
         print("-"*70)
-        relationships = get_app_server_relationships(access_token, sn_instance)
-        upsert_app_server_mappings(conn, relationships, apps, servers)
+        if apps and servers:
+            relationships = get_app_server_relationships(access_token, sn_instance)
+            if relationships:
+                upsert_app_server_mappings(conn, relationships, apps, servers)
+            else:
+                print("⚠️  No relationships found")
+        else:
+            print("⊘ Skipping relationships (no apps or servers)")
         print()
         
         print("="*70)

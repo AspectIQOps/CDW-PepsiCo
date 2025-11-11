@@ -112,9 +112,7 @@ def validate_credentials():
 def main():
     """Main pipeline orchestration"""
     log_step("Starting ETL Pipeline", Colors.BLUE)
-    print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-
+    
     # Validate credentials before starting
     creds_valid, has_servicenow, has_appdynamics = validate_credentials()
     
@@ -126,6 +124,11 @@ def main():
 
     print()
 
+    # ServiceNow ETL - allow more time for large data fetches
+    if not run_etl_script("snow_etl.py", "ServiceNow CMDB Extraction", timeout=600):  # 10 minutes
+        print(f"{Colors.RED}ServiceNow ETL failed - check credentials and network connectivity{Colors.NC}")
+        return False
+    
     # Define pipeline steps with dependency information
     pipeline_steps = []
     
