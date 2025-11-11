@@ -22,7 +22,7 @@ def log_step(message, color=Colors.BLUE):
     print(f"{color}{message}{Colors.NC}")
     print(f"{color}{'='*60}{Colors.NC}")
 
-def run_etl_script(script_name, description):
+def run_etl_script(script_name, description, timeout=300):
     """Run an ETL script and handle errors"""
     print(f"\n{Colors.YELLOW}▶ Running: {description}{Colors.NC}")
     
@@ -34,7 +34,7 @@ def run_etl_script(script_name, description):
             check=True,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout per script
+            timeout=timeout
         )
         print(result.stdout)
         if result.stderr:
@@ -42,7 +42,7 @@ def run_etl_script(script_name, description):
         print(f"{Colors.GREEN}✅ {description} completed successfully{Colors.NC}\n")
         return True
     except subprocess.TimeoutExpired:
-        print(f"{Colors.RED}❌ {description} timed out after 5 minutes{Colors.NC}")
+        print(f"{Colors.RED}❌ {description} timed out after {timeout} seconds{Colors.NC}")
         return False
     except subprocess.CalledProcessError as e:
         print(f"{Colors.RED}❌ {description} failed with exit code {e.returncode}{Colors.NC}")

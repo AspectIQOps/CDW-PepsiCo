@@ -34,11 +34,13 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
     base_url = f"https://{instance}.service-now.com/api/now/table/{table}"
     headers = {
         "Accept": "application/json",
-        "Authorization": f"Bearer {access_token}"
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
     }
     
     all_records = []
     offset = 0
+    batch_count = 0
     
     while True:
         params = {
@@ -51,7 +53,7 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
             params["sysparm_query"] = query
         
         try:
-            response = requests.get(base_url, headers=headers, params=params, timeout=30)
+            response = requests.get(base_url, headers=headers, params=params, timeout=60)
             response.raise_for_status()
             
             records = response.json().get("result", [])
@@ -59,16 +61,25 @@ def query_snow_paginated(access_token, instance, table, fields, query=None, limi
                 break
             
             all_records.extend(records)
-            print(f"  ✓ Fetched {len(all_records)} records so far...")
+            batch_count += 1
+            
+            # Progress update every batch
+            if batch_count % 5 == 0:
+                print(f"  ✓ Fetched {len(all_records)} records (batch {batch_count})...")
+            
             offset += limit
             
         except requests.exceptions.Timeout:
-            print(f"  ⚠️  Request timed out at offset {offset}. Continuing with collected data...")
+            print(f"  ⚠️  Request timed out at offset {offset}. Continuing with {len(all_records)} collected records...")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"  ⚠️  Request error at offset {offset}: {e}. Continuing with {len(all_records)} collected records...")
             break
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f"  ❌ Unexpected error: {e}")
             break
     
+    print(f"  ✓ Retrieved total {len(all_records)} records in {batch_count} batches")
     return all_records
 
 def get_applications(access_token, instance):
@@ -145,6 +156,45 @@ def upsert_applications(conn, apps):
     conn.commit()
     print(f"✓ Upserted {len(records)} applications")
 
+def upsert_applications_batched(conn, apps, batch_size=1000):
+    """Insert or update applications in batches"""
+    print(f"Upserting applications into applications_dim (batch size: {batch_size})...")
+    
+    cursor = conn.cursor()
+    total_upserted = 0
+    
+    for i in range(0, len(apps), batch_size):
+        batch = apps[i:i+batch_size]
+        records = []
+        
+        for app in batch:
+            app_sys_id = extract_sys_id(app.get('sys_id'))
+            name = extract_sys_id(app.get('name'))
+            
+            if app_sys_id:  # Only insert if we have a sys_id
+                records.append((app_sys_id, name))
+        
+        if records:
+            insert_query = """
+                INSERT INTO applications_dim (sn_sys_id, sn_service_name)
+                VALUES %s
+                ON CONFLICT (sn_sys_id) DO UPDATE SET
+                    sn_service_name = EXCLUDED.sn_service_name,
+                    updated_at = CURRENT_TIMESTAMP
+            """
+            
+            try:
+                execute_values(cursor, insert_query, records)
+                conn.commit()
+                total_upserted += len(records)
+                print(f"  ✓ Batch {i//batch_size + 1}: Upserted {len(records)} applications ({total_upserted}/{len(apps)} total)")
+            except Exception as e:
+                print(f"  ❌ Error upserting batch: {e}")
+                conn.rollback()
+                raise
+    
+    print(f"✓ Total applications upserted: {total_upserted}")
+
 def get_servers(access_token, instance):
     """Fetch servers from ServiceNow CMDB"""
     print("Fetching ServiceNow servers (cmdb_ci_server)...")
@@ -190,6 +240,47 @@ def upsert_servers(conn, servers):
     execute_values(cursor, insert_query, records)
     conn.commit()
     print(f"✓ Upserted {len(records)} servers")
+
+def upsert_servers_batched(conn, servers, batch_size=1000):
+    """Insert or update servers in batches"""
+    print(f"Upserting servers into servers_dim (batch size: {batch_size})...")
+    
+    cursor = conn.cursor()
+    total_upserted = 0
+    
+    for i in range(0, len(servers), batch_size):
+        batch = servers[i:i+batch_size]
+        records = []
+        
+        for server in batch:
+            server_sys_id = extract_sys_id(server.get('sys_id'))
+            name = extract_sys_id(server.get('name'))
+            os_type = extract_sys_id(server.get('os'))
+            
+            if server_sys_id:
+                records.append((server_sys_id, name, os_type))
+        
+        if records:
+            insert_query = """
+                INSERT INTO servers_dim (sn_sys_id, server_name, os)
+                VALUES %s
+                ON CONFLICT (sn_sys_id) DO UPDATE SET
+                    server_name = EXCLUDED.server_name,
+                    os = EXCLUDED.os,
+                    updated_at = CURRENT_TIMESTAMP
+            """
+            
+            try:
+                execute_values(cursor, insert_query, records)
+                conn.commit()
+                total_upserted += len(records)
+                print(f"  ✓ Batch {i//batch_size + 1}: Upserted {len(records)} servers ({total_upserted}/{len(servers)} total)")
+            except Exception as e:
+                print(f"  ❌ Error upserting batch: {e}")
+                conn.rollback()
+                raise
+    
+    print(f"✓ Total servers upserted: {total_upserted}")
 
 def upsert_app_server_mappings(conn, relationships, apps, servers):
     """Process and insert app-to-server mappings"""
@@ -301,13 +392,13 @@ def main():
         print("STEP 1: Applications")
         print("-"*70)
         apps = get_applications(access_token, sn_instance)
-        upsert_applications(conn, apps)
+        upsert_applications_batched(conn, apps, batch_size=1000)
         print()
         
         print("STEP 2: Servers")
         print("-"*70)
         servers = get_servers(access_token, sn_instance)
-        upsert_servers(conn, servers)
+        upsert_servers_batched(conn, servers, batch_size=1000)
         print()
         
         print("STEP 3: Application-to-Server Relationships")
