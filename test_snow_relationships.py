@@ -2,16 +2,61 @@
 """
 ServiceNow Relationship Diagnostic
 Run this to understand your CMDB relationship structure
+
+Usage:
+    python3 test_snow_relationships.py
+    
+Or with explicit credentials:
+    SN_INSTANCE=pepsicodev2 SN_CLIENT_ID=xxx SN_CLIENT_SECRET=xxx python3 test_snow_relationships.py
 """
 import os
+import sys
 import requests
 from requests.auth import HTTPBasicAuth
 
-SN_INSTANCE = os.getenv('SN_INSTANCE')
+# Try to load from environment first, then from AWS SSM if available
+SN_INSTANCE = os.getenv('SN_INSTANCE', 'pepsicodev2')
 SN_CLIENT_ID = os.getenv('SN_CLIENT_ID')
 SN_CLIENT_SECRET = os.getenv('SN_CLIENT_SECRET')
 SN_USER = os.getenv('SN_USER')
 SN_PASS = os.getenv('SN_PASS')
+
+# Try to load from SSM if not in environment
+if not SN_CLIENT_ID or not SN_CLIENT_SECRET:
+    try:
+        import boto3
+        ssm = boto3.client('ssm', region_name='us-east-1')
+        
+        params = ssm.get_parameters(
+            Names=[
+                '/pepsico/servicenow/instance',
+                '/pepsico/servicenow/client_id',
+                '/pepsico/servicenow/client_secret'
+            ],
+            WithDecryption=True
+        )
+        
+        for param in params['Parameters']:
+            name = param['Name']
+            value = param['Value']
+            if 'instance' in name:
+                SN_INSTANCE = value
+            elif 'client_id' in name:
+                SN_CLIENT_ID = value
+            elif 'client_secret' in name:
+                SN_CLIENT_SECRET = value
+        
+        print(f"✓ Loaded credentials from AWS SSM")
+    except:
+        pass
+
+if not (SN_CLIENT_ID and SN_CLIENT_SECRET) and not (SN_USER and SN_PASS):
+    print("ERROR: No ServiceNow credentials found!")
+    print("Set environment variables: SN_INSTANCE, SN_CLIENT_ID, SN_CLIENT_SECRET")
+    print("Or: SN_INSTANCE, SN_USER, SN_PASS")
+    sys.exit(1)
+
+print(f"Using instance: {SN_INSTANCE}")
 
 def get_oauth_token():
     """Get OAuth token"""
