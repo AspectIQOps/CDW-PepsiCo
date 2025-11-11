@@ -2,6 +2,8 @@
 """
 Reconciliation Engine - Fuzzy Matching Between AppD and ServiceNow
 Run after both appd_etl.py and snow_etl.py complete
+
+FIXED: Handles duplicate appd_application_id constraint properly
 """
 import psycopg2
 from difflib import SequenceMatcher
@@ -21,12 +23,18 @@ def fuzzy_match_score(str1, str2):
     return SequenceMatcher(None, str1.lower(), str2.lower()).ratio() * 100
 
 def reconcile_applications(conn):
-    """Match AppD apps with ServiceNow services"""
+    """Match AppD apps with ServiceNow services
+    
+    FIXED LOGIC:
+    - Instead of copying AppD fields to ServiceNow record and deleting AppD record,
+    - We now UPDATE the AppD record with ServiceNow fields and update foreign keys
+    - This prevents unique constraint violations
+    """
     cursor = conn.cursor()
     
     # Get unmatched AppD applications (have AppD data but no ServiceNow link)
     cursor.execute("""
-        SELECT app_id, appd_application_name 
+        SELECT app_id, appd_application_name, appd_application_id
         FROM applications_dim 
         WHERE sn_sys_id IS NULL AND appd_application_name IS NOT NULL
     """)
@@ -34,7 +42,8 @@ def reconcile_applications(conn):
     
     # Get unmatched ServiceNow services (have ServiceNow data but no AppD link)
     cursor.execute("""
-        SELECT app_id, sn_sys_id, sn_service_name 
+        SELECT app_id, sn_sys_id, sn_service_name, owner_id, sector_id, 
+               architecture_id, h_code, support_group
         FROM applications_dim 
         WHERE appd_application_id IS NULL AND sn_service_name IS NOT NULL
     """)
@@ -42,66 +51,80 @@ def reconcile_applications(conn):
     
     matches_made = 0
     
-    for appd_id, appd_name in appd_apps:
+    for appd_id, appd_name, appd_application_id in appd_apps:
         best_match = None
         best_score = 0
         
-        for snow_id, snow_sys_id, snow_name in snow_services:
+        for snow_record in snow_services:
+            snow_id = snow_record[0]
+            snow_sys_id = snow_record[1]
+            snow_name = snow_record[2]
+            
             score = fuzzy_match_score(appd_name, snow_name)
             if score > best_score:
                 best_score = score
-                best_match = (snow_id, snow_sys_id, snow_name)
+                best_match = snow_record
         
         # Auto-match threshold: 80%
         if best_score >= 80:
-            snow_id, snow_sys_id, snow_name = best_match
+            (snow_id, snow_sys_id, snow_name, owner_id, sector_id, 
+             architecture_id, h_code, support_group) = best_match
             
-            # Step 1: Copy AppD fields to the ServiceNow record
+            # FIXED APPROACH: Update the AppD record with ServiceNow enrichment data
+            # This keeps the appd_application_id unique and adds ServiceNow metadata
             cursor.execute("""
                 UPDATE applications_dim 
-                SET appd_application_id = (SELECT appd_application_id FROM applications_dim WHERE app_id = %s),
-                    appd_application_name = (SELECT appd_application_name FROM applications_dim WHERE app_id = %s),
+                SET sn_sys_id = %s,
+                    sn_service_name = %s,
+                    owner_id = %s,
+                    sector_id = %s,
+                    architecture_id = %s,
+                    h_code = %s,
+                    support_group = %s,
                     updated_at = NOW()
                 WHERE app_id = %s
-            """, (appd_id, appd_id, snow_id))
+            """, (snow_sys_id, snow_name, owner_id, sector_id, 
+                  architecture_id, h_code, support_group, appd_id))
             
-            # Step 2: Update foreign key references
+            # Now delete the ServiceNow-only record since we've merged its data
+            cursor.execute("DELETE FROM applications_dim WHERE app_id = %s", (snow_id,))
+            
+            # Update any foreign key references that pointed to the deleted ServiceNow record
+            # (though there shouldn't be any since it had no AppD data)
             cursor.execute("""
                 UPDATE license_usage_fact
                 SET app_id = %s
                 WHERE app_id = %s
-            """, (snow_id, appd_id))
+            """, (appd_id, snow_id))
             
             cursor.execute("""
                 UPDATE license_cost_fact
                 SET app_id = %s
                 WHERE app_id = %s
-            """, (snow_id, appd_id))
+            """, (appd_id, snow_id))
             
             cursor.execute("""
                 UPDATE chargeback_fact
                 SET app_id = %s
                 WHERE app_id = %s
-            """, (snow_id, appd_id))
+            """, (appd_id, snow_id))
             
             cursor.execute("""
                 UPDATE forecast_fact
                 SET app_id = %s
                 WHERE app_id = %s
-            """, (snow_id, appd_id))
+            """, (appd_id, snow_id))
             
-            # Step 3: Log the match
+            # Log the match
             cursor.execute("""
                 INSERT INTO reconciliation_log 
                 (source_a, source_b, match_key_a, match_key_b, confidence_score, match_status, resolved_app_id)
                 VALUES ('AppDynamics', 'ServiceNow', %s, %s, %s, 'auto_matched', %s)
-            """, (appd_name, snow_name, best_score, snow_id))
-            
-            # Step 4: Delete AppD-only record
-            cursor.execute("DELETE FROM applications_dim WHERE app_id = %s", (appd_id,))
+            """, (appd_name, snow_name, best_score, appd_id))
             
             matches_made += 1
-            snow_services = [(sid, ssid, sname) for sid, ssid, sname in snow_services if sid != snow_id]
+            # Remove matched ServiceNow service from available list
+            snow_services = [s for s in snow_services if s[0] != snow_id]
         
         # Manual review threshold: 50-80%
         elif best_score >= 50:

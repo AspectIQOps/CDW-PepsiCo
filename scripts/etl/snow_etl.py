@@ -280,13 +280,27 @@ def fetch_and_load_servers(conn):
         # Strategy: Fetch servers in smaller batches by querying relationships first
         # This is much more efficient than fetching all servers
         print("Fetching application-server relationships to identify relevant servers...")
-        relationships = fetch_snow_table('cmdb_rel_ci',
-            ['parent', 'child', 'type'],
-            query='type.name=Runs on::Runs^parentIN' + ','.join(app_sys_ids[:100]))  # Batch first 100
+        
+        # PepsiCo uses "Hosted on::Hosts" relationship type
+        # Query format: type.name=Hosted on::Hosts^parentIN{sys_id1},{sys_id2},...
+        all_relationships = []
+        batch_size = 100
+        
+        for i in range(0, len(app_sys_ids), batch_size):
+            batch = app_sys_ids[i:i+batch_size]
+            query = f"type.name=Hosted on::Hosts^parentIN{','.join(batch)}"
+            
+            print(f"Fetching relationship batch {i//batch_size + 1}/{(len(app_sys_ids)-1)//batch_size + 1}")
+            relationships = fetch_snow_table('cmdb_rel_ci',
+                ['parent', 'child', 'type'],
+                query=query)
+            all_relationships.extend(relationships)
+        
+        print(f"Retrieved {len(all_relationships)} total relationships")
         
         # Extract unique server sys_ids from relationships
         server_sys_ids = set()
-        for rel in relationships:
+        for rel in all_relationships:
             child_sys_id = rel.get('child', {}).get('value') if isinstance(rel.get('child'), dict) else rel.get('child')
             if child_sys_id:
                 server_sys_ids.add(child_sys_id)
@@ -351,7 +365,7 @@ def fetch_and_map_relationships(conn):
         
         for i in range(0, len(app_sys_ids), batch_size):
             batch = app_sys_ids[i:i+batch_size]
-            query = f"type.name=Runs on::Runs^parentIN{','.join(batch)}"
+            query = f"type.name=Hosted on::Hosts^parentIN{','.join(batch)}"
             
             print(f"Fetching relationship batch {i//batch_size + 1}/{(len(app_sys_ids)-1)//batch_size + 1}")
             relationships = fetch_snow_table('cmdb_rel_ci',
