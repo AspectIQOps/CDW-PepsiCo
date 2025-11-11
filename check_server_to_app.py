@@ -119,21 +119,83 @@ if found_relationships:
     parent_ids = [extract_sys_id(r.get('parent')) for r in found_relationships]
     child_ids = [extract_sys_id(r.get('child')) for r in found_relationships]
     
-    print("Checking if parents are applications...")
-    apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
-                     query=f"sys_idIN{','.join(set(parent_ids))}", limit=100)
-    if apps:
-        print(f"✅ Found {len(apps)} linked applications:")
-        for app in apps[:10]:
-            print(f"   - {extract_value(app.get('name'))}")
+    print(f"Parent IDs count: {len(parent_ids)}")
+    print(f"Child IDs count: {len(child_ids)}")
+    
+    # Remove duplicates and filter empty strings
+    parent_ids = list(set([id for id in parent_ids if id]))
+    child_ids = list(set([id for id in child_ids if id]))
+    
+    print(f"Unique parent IDs: {len(parent_ids)}")
+    print(f"Unique child IDs: {len(child_ids)}")
+    
+    print("\nChecking if parents are applications...")
+    try:
+        # Query in smaller batches to avoid timeout
+        parent_apps = []
+        for i in range(0, len(parent_ids), 50):
+            batch = parent_ids[i:i+50]
+            query = f"sys_idIN{','.join(batch)}"
+            apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
+                             query=query, limit=100)
+            parent_apps.extend(apps)
+            if apps:
+                print(f"   Batch {i//50 + 1}: Found {len(apps)} applications")
+        
+        if parent_apps:
+            print(f"\n✅ Found {len(parent_apps)} linked applications (as parents):")
+            for app in parent_apps[:10]:
+                print(f"   - {extract_value(app.get('name'))}")
+    except Exception as e:
+        print(f"   ⚠️  Error checking parent applications: {str(e)}")
     
     print("\nChecking if children are applications...")
-    apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
-                     query=f"sys_idIN{','.join(set(child_ids))}", limit=100)
-    if apps:
-        print(f"✅ Found {len(apps)} linked applications:")
-        for app in apps[:10]:
-            print(f"   - {extract_value(app.get('name'))}")
+    try:
+        # Query in smaller batches to avoid timeout
+        child_apps = []
+        for i in range(0, len(child_ids), 50):
+            batch = child_ids[i:i+50]
+            print(f"   Querying batch {i//50 + 1} ({len(batch)} IDs)...", end="", flush=True)
+            query = f"sys_idIN{','.join(batch)}"
+            apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
+                             query=query, limit=100)
+            child_apps.extend(apps)
+            if apps:
+                print(f" Found {len(apps)} applications")
+            else:
+                print(" No applications")
+        
+        if child_apps:
+            print(f"\n✅ Found {len(child_apps)} linked applications (as children):")
+            for app in child_apps[:10]:
+                print(f"   - {extract_value(app.get('name'))}")
+        else:
+            print("\n⊘ No applications found as children")
+    except Exception as e:
+        print(f"   ⚠️  Error checking child applications: {str(e)}")
+    
+    print("\nChecking if children are servers...")
+    try:
+        child_servers = []
+        for i in range(0, len(child_ids), 50):
+            batch = child_ids[i:i+50]
+            print(f"   Querying batch {i//50 + 1} ({len(batch)} IDs)...", end="", flush=True)
+            query = f"sys_idIN{','.join(batch)}"
+            servers = query_snow('cmdb_ci_server', ['sys_id', 'name'], 
+                                query=query, limit=100)
+            child_servers.extend(servers)
+            if servers:
+                print(f" Found {len(servers)} servers")
+            else:
+                print(" No servers")
+        
+        if child_servers:
+            print(f"\n✅ Found {len(child_servers)} linked servers (as children):")
+            for server in child_servers[:10]:
+                print(f"   - {extract_value(server.get('name'))}")
+    except Exception as e:
+        print(f"   ⚠️  Error checking child servers: {str(e)}")
+
 else:
     print("❌ NO APP-SERVER RELATIONSHIPS FOUND")
     print("\nPossible reasons:")
