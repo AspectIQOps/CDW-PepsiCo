@@ -132,7 +132,7 @@ def main():
     # Run validation
     print(f"\n{Colors.YELLOW}▶ Running: Data Validation{Colors.NC}")
     try:
-        from validate_pipeline import validate_pipeline
+        from scripts.utils.validate_pipeline import validate_pipeline
         validate_pipeline()
         results.append(("Data Validation", True))
         print(f"{Colors.GREEN}✅ Data Validation completed successfully{Colors.NC}\n")
