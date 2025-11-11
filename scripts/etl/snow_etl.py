@@ -127,25 +127,18 @@ def upsert_applications(conn, apps):
     for app in apps:
         app_id = extract_sys_id(app.get('sys_id'))
         name = extract_sys_id(app.get('name'))
-        description = extract_sys_id(app.get('short_description'))
-        owner = extract_sys_id(app.get('owner'))
         
         records.append((
             app_id,
-            name,
-            description,
-            owner,
-            datetime.now()
+            name
         ))
     
     insert_query = """
-        INSERT INTO applications_dim (cmdb_sys_id, sn_service_name, sn_description, sn_owner, last_updated)
+        INSERT INTO applications_dim (sn_sys_id, sn_service_name)
         VALUES %s
-        ON CONFLICT (cmdb_sys_id) DO UPDATE SET
+        ON CONFLICT (sn_sys_id) DO UPDATE SET
             sn_service_name = EXCLUDED.sn_service_name,
-            sn_description = EXCLUDED.sn_description,
-            sn_owner = EXCLUDED.sn_owner,
-            last_updated = EXCLUDED.last_updated
+            updated_at = CURRENT_TIMESTAMP
     """
     
     execute_values(cursor, insert_query, records)
@@ -175,27 +168,23 @@ def upsert_servers(conn, servers):
     
     records = []
     for server in servers:
-        server_id = extract_sys_id(server.get('sys_id'))
+        server_sys_id = extract_sys_id(server.get('sys_id'))
         name = extract_sys_id(server.get('name'))
         os_type = extract_sys_id(server.get('os'))
-        sys_class = extract_sys_id(server.get('sys_class_name'))
         
         records.append((
-            server_id,
+            server_sys_id,
             name,
-            os_type,
-            sys_class,
-            datetime.now()
+            os_type
         ))
     
     insert_query = """
-        INSERT INTO servers_dim (cmdb_sys_id, sn_server_name, sn_os_type, sn_sys_class, last_updated)
+        INSERT INTO servers_dim (sn_sys_id, server_name, os)
         VALUES %s
-        ON CONFLICT (cmdb_sys_id) DO UPDATE SET
-            sn_server_name = EXCLUDED.sn_server_name,
-            sn_os_type = EXCLUDED.sn_os_type,
-            sn_sys_class = EXCLUDED.sn_sys_class,
-            last_updated = EXCLUDED.last_updated
+        ON CONFLICT (sn_sys_id) DO UPDATE SET
+            server_name = EXCLUDED.server_name,
+            os = EXCLUDED.os,
+            updated_at = CURRENT_TIMESTAMP
     """
     
     execute_values(cursor, insert_query, records)
@@ -212,40 +201,60 @@ def upsert_app_server_mappings(conn, relationships, apps, servers):
     app_lookup = {extract_sys_id(app.get('sys_id')): app for app in apps}
     server_lookup = {extract_sys_id(server.get('sys_id')): server for server in servers}
     
+    # Now look up the actual database IDs
+    app_sys_id_to_id = {}
+    server_sys_id_to_id = {}
+    
+    # Get app_id mappings
+    app_sys_ids = list(app_lookup.keys())
+    if app_sys_ids:
+        placeholders = ','.join(['%s'] * len(app_sys_ids))
+        cursor.execute(f"SELECT app_id, sn_sys_id FROM applications_dim WHERE sn_sys_id IN ({placeholders})", app_sys_ids)
+        for app_id, sn_sys_id in cursor.fetchall():
+            app_sys_id_to_id[sn_sys_id] = app_id
+    
+    # Get server_id mappings
+    server_sys_ids = list(server_lookup.keys())
+    if server_sys_ids:
+        placeholders = ','.join(['%s'] * len(server_sys_ids))
+        cursor.execute(f"SELECT server_id, sn_sys_id FROM servers_dim WHERE sn_sys_id IN ({placeholders})", server_sys_ids)
+        for server_id, sn_sys_id in cursor.fetchall():
+            server_sys_id_to_id[sn_sys_id] = server_id
+    
     records = []
     skipped = 0
     
     for rel in relationships:
-        parent_id = extract_sys_id(rel.get('parent'))
-        child_id = extract_sys_id(rel.get('child'))
+        parent_sys_id = extract_sys_id(rel.get('parent'))
+        child_sys_id = extract_sys_id(rel.get('child'))
         rel_type = extract_sys_id(rel.get('type'))
         
         app_id = None
         server_id = None
-        relationship_type = extract_sys_id(rel_type) if rel_type else "Unknown"
+        relationship_type = rel_type if rel_type else "Unknown"
         
         # Determine which is app and which is server
-        if parent_id in app_lookup and child_id in server_lookup:
-            app_id = parent_id
-            server_id = child_id
-        elif parent_id in server_lookup and child_id in app_lookup:
-            app_id = child_id
-            server_id = parent_id
+        if parent_sys_id in app_lookup and child_sys_id in server_lookup:
+            app_id = app_sys_id_to_id.get(parent_sys_id)
+            server_id = server_sys_id_to_id.get(child_sys_id)
+        elif parent_sys_id in server_lookup and child_sys_id in app_lookup:
+            app_id = app_sys_id_to_id.get(child_sys_id)
+            server_id = server_sys_id_to_id.get(parent_sys_id)
         else:
             # Could be app-to-app or other relationships
             skipped += 1
             continue
         
         if app_id and server_id:
-            records.append((app_id, server_id, relationship_type, datetime.now()))
+            records.append((app_id, server_id, relationship_type))
     
     if records:
         insert_query = """
-            INSERT INTO app_server_mapping (app_cmdb_sys_id, server_cmdb_sys_id, relationship_type, discovered_at)
+            INSERT INTO app_server_mapping (app_id, server_id, relationship_type)
             VALUES %s
-            ON CONFLICT (app_cmdb_sys_id, server_cmdb_sys_id) DO UPDATE SET
+            ON CONFLICT (app_id, server_id) DO UPDATE SET
                 relationship_type = EXCLUDED.relationship_type,
-                discovered_at = EXCLUDED.discovered_at
+                created_at = CURRENT_TIMESTAMP
         """
         
         execute_values(cursor, insert_query, records)
