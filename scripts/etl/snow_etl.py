@@ -5,6 +5,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 import os
 from datetime import datetime
+import time
 
 def extract_sys_id(item):
     """Extract sys_id from either string or dict format"""
@@ -171,12 +172,28 @@ def upsert_applications(conn, apps):
     conn.commit()
     print(f"✓ Upserted {len(records)} applications")
 
-def upsert_applications_batched(conn, apps, batch_size=1000):
-    """Insert or update applications in batches"""
-    print(f"Upserting applications into applications_dim (batch size: {batch_size})...")
+def truncate_string(value, max_length=100):
+    """Safely truncate string to max length"""
+    if not value:
+        return value
+    s = str(value)
+    if len(s) > max_length:
+        print(f"    ⚠️  Truncating value from {len(s)} to {max_length} chars: {s[:50]}...")
+        return s[:max_length]
+    return s
+
+def upsert_applications_batched(conn, apps, batch_size=500):
+    """Batch upsert applications with minimal logging"""
+    if not apps:
+        print("  ⊘ No applications to upsert")
+        return 0
+    
+    print(f"Upserting {len(apps)} applications (batch size: {batch_size})...")
     
     cursor = conn.cursor()
     total_upserted = 0
+    start_time = time.time()
+    skipped = 0
     
     for i in range(0, len(apps), batch_size):
         batch = apps[i:i+batch_size]
@@ -184,10 +201,12 @@ def upsert_applications_batched(conn, apps, batch_size=1000):
         
         for app in batch:
             app_sys_id = extract_sys_id(app.get('sys_id'))
-            name = extract_sys_id(app.get('name'))
+            name = truncate_string(extract_sys_id(app.get('name')), 255)
             
-            if app_sys_id:  # Only insert if we have a sys_id
+            if app_sys_id and name:
                 records.append((app_sys_id, name))
+            else:
+                skipped += 1
         
         if records:
             insert_query = """
@@ -199,16 +218,23 @@ def upsert_applications_batched(conn, apps, batch_size=1000):
             """
             
             try:
-                execute_values(cursor, insert_query, records)
+                execute_values(cursor, insert_query, records, page_size=500)
                 conn.commit()
                 total_upserted += len(records)
-                print(f"  ✓ Batch {i//batch_size + 1}: Upserted {len(records)} applications ({total_upserted}/{len(apps)} total)")
+                elapsed = time.time() - start_time
+                rate = total_upserted / elapsed if elapsed > 0 else 0
+                if (i // batch_size + 1) % 2 == 0:
+                    print(f"  ✓ Batch {i//batch_size + 1}: {len(records):4d} apps ({rate:6.0f} rec/sec)")
             except Exception as e:
-                print(f"  ❌ Error upserting batch: {e}")
+                print(f"  ❌ Error in batch {i//batch_size + 1}: {e}")
                 conn.rollback()
                 raise
     
-    print(f"✓ Total applications upserted: {total_upserted}")
+    elapsed = time.time() - start_time
+    print(f"✓ Upserted {total_upserted} applications in {elapsed:.1f}s")
+    if skipped > 0:
+        print(f"  ⊘ Skipped {skipped} applications (missing sys_id or name)")
+    return total_upserted
 
 def get_servers(access_token, instance):
     """Fetch servers from ServiceNow CMDB"""
@@ -259,12 +285,18 @@ def upsert_servers(conn, servers):
     conn.commit()
     print(f"✓ Upserted {len(records)} servers")
 
-def upsert_servers_batched(conn, servers, batch_size=1000):
-    """Insert or update servers in batches"""
-    print(f"Upserting servers into servers_dim (batch size: {batch_size})...")
+def upsert_servers_batched(conn, servers, batch_size=500):
+    """Batch upsert servers with minimal logging"""
+    if not servers:
+        print("  ⊘ No servers to upsert")
+        return 0
+    
+    print(f"Upserting {len(servers)} servers (batch size: {batch_size})...")
     
     cursor = conn.cursor()
     total_upserted = 0
+    start_time = time.time()
+    skipped = 0
     
     for i in range(0, len(servers), batch_size):
         batch = servers[i:i+batch_size]
@@ -272,11 +304,13 @@ def upsert_servers_batched(conn, servers, batch_size=1000):
         
         for server in batch:
             server_sys_id = extract_sys_id(server.get('sys_id'))
-            name = extract_sys_id(server.get('name'))
-            os_type = extract_sys_id(server.get('os'))
+            name = truncate_string(extract_sys_id(server.get('name')), 255)
+            os_type = truncate_string(extract_sys_id(server.get('os')), 100)
             
-            if server_sys_id:
+            if server_sys_id and name:
                 records.append((server_sys_id, name, os_type))
+            else:
+                skipped += 1
         
         if records:
             insert_query = """
@@ -289,16 +323,23 @@ def upsert_servers_batched(conn, servers, batch_size=1000):
             """
             
             try:
-                execute_values(cursor, insert_query, records)
+                execute_values(cursor, insert_query, records, page_size=500)
                 conn.commit()
                 total_upserted += len(records)
-                print(f"  ✓ Batch {i//batch_size + 1}: Upserted {len(records)} servers ({total_upserted}/{len(servers)} total)")
+                elapsed = time.time() - start_time
+                rate = total_upserted / elapsed if elapsed > 0 else 0
+                if (i // batch_size + 1) % 2 == 0:
+                    print(f"  ✓ Batch {i//batch_size + 1}: {len(records):4d} servers ({rate:6.0f} rec/sec)")
             except Exception as e:
-                print(f"  ❌ Error upserting batch: {e}")
+                print(f"  ❌ Error in batch {i//batch_size + 1}: {e}")
                 conn.rollback()
                 raise
     
-    print(f"✓ Total servers upserted: {total_upserted}")
+    elapsed = time.time() - start_time
+    print(f"✓ Upserted {total_upserted} servers in {elapsed:.1f}s")
+    if skipped > 0:
+        print(f"  ⊘ Skipped {skipped} servers (missing sys_id or name)")
+    return total_upserted
 
 def upsert_app_server_mappings(conn, relationships, apps, servers):
     """Process and insert app-to-server mappings"""
