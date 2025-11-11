@@ -38,127 +38,109 @@ def query_snow(table, fields, query=None, limit=10):
     response.raise_for_status()
     return response.json()['result']
 
+def extract_sys_id(item):
+    """Extract sys_id from either string or dict format"""
+    if isinstance(item, dict):
+        return item.get('value') or item.get('sys_id')
+    return item
+
+def extract_value(item):
+    """Extract display value from either string or dict format"""
+    if isinstance(item, dict):
+        return item.get('display_value') or item.get('value') or str(item)
+    return str(item)
+
 print("="*80)
 print("CHECKING SERVER-TO-APPLICATION RELATIONSHIPS")
 print("="*80)
 
 # Get some servers
 print("\n1. Getting sample servers...")
-servers = query_snow('cmdb_ci_server', ['sys_id', 'name'], 
-                     query='operational_status=1', limit=10)
+servers = query_snow('cmdb_ci_server', ['sys_id', 'name', 'operational_status'], 
+                    query='operational_status=1', limit=10)
+server_sys_ids = [extract_sys_id(s['sys_id']) for s in servers]
 print(f"   Found {len(servers)} operational servers:")
-for s in servers[:5]:
-    name = s.get('name', 'N/A')
-    if isinstance(name, dict):
-        name = name.get('display_value', 'N/A')
-    print(f"   - {name}")
+for s in servers:
+    print(f"   - {extract_value(s.get('name'))}")
 
-if not servers:
-    print("   No servers found!")
-    sys.exit(0)
-
-server_sys_ids = [s['sys_id'] for s in servers]
-
-# Test different relationship types from server perspective (server is CHILD, app is PARENT)
 print("\n2. Testing relationship types (server as CHILD → app as PARENT)...")
-
-test_types = [
-    ('Hosted on::Hosts', 'Server is hosted on application'),
-    ('Runs on::Runs', 'Server runs on application'),
-    ('Depends on::Used by', 'Server depends on application'),
-    ('Contained by::Contains', 'Server contained by application'),
-    ('Managed by::Manages', 'Server managed by application'),
+child_parent_types = [
+    'Hosted on::Hosts',
+    'Runs on::Runs',
+    'Depends on::Used by',
+    'Contained by::Contains',
+    'Managed by::Manages'
 ]
 
-best_type = None
-best_count = 0
-
-for rel_type, description in test_types:
+found_relationships = []
+for rel_type in child_parent_types:
+    batch = server_sys_ids[:5]  # Test with first 5 servers
+    query = f"type.name={rel_type}^childIN{','.join(batch)}"
     try:
-        # Query where servers are CHILDREN (apps would be PARENTS)
-        query = f"type.name={rel_type}^childIN{','.join(server_sys_ids)}"
         rels = query_snow('cmdb_rel_ci', ['parent', 'child', 'type'], 
-                         query=query, limit=10)
-        
+                         query=query, limit=50)
         if rels:
-            print(f"\n   ✅ '{rel_type}': Found {len(rels)} relationships")
-            print(f"      {description}")
-            
-            # Check if parents are applications
-            for rel in rels[:3]:
-                parent = rel.get('parent', {})
-                child = rel.get('child', {})
-                
-                parent_id = parent.get('value') if isinstance(parent, dict) else parent
-                parent_name = parent.get('display_value') if isinstance(parent, dict) else 'N/A'
-                child_name = child.get('display_value') if isinstance(child, dict) else 'N/A'
-                
-                print(f"      Sample: {parent_name} ← {child_name}")
-            
-            if len(rels) > best_count:
-                best_count = len(rels)
-                best_type = rel_type
+            print(f"   ✅ '{rel_type}': Found {len(rels)} relationships")
+            found_relationships.extend(rels)
         else:
             print(f"   ⊘ '{rel_type}': No relationships found")
-            
     except Exception as e:
-        print(f"   ❌ '{rel_type}': Error - {str(e)[:100]}")
+        print(f"   ❌ '{rel_type}': Error - {str(e)}")
 
-# Also test reverse: server as PARENT → app as CHILD
 print("\n3. Testing relationship types (server as PARENT → app as CHILD)...")
-
-reverse_types = [
-    ('Hosts::Hosted on', 'Server hosts application'),
-    ('Runs::Runs on', 'Server runs application'),
-    ('Contains::Contained by', 'Server contains application'),
+parent_child_types = [
+    'Hosts::Hosted on',
+    'Runs::Runs on',
+    'Contains::Contained by'
 ]
 
-for rel_type, description in reverse_types:
+for rel_type in parent_child_types:
+    batch = server_sys_ids[:5]
+    query = f"type.name={rel_type}^parentIN{','.join(batch)}"
     try:
-        query = f"type.name={rel_type}^parentIN{','.join(server_sys_ids)}"
         rels = query_snow('cmdb_rel_ci', ['parent', 'child', 'type'], 
-                         query=query, limit=10)
-        
+                         query=query, limit=50)
         if rels:
-            print(f"\n   ✅ '{rel_type}': Found {len(rels)} relationships")
-            print(f"      {description}")
-            
-            for rel in rels[:3]:
-                parent = rel.get('parent', {})
-                child = rel.get('child', {})
-                
-                parent_name = parent.get('display_value') if isinstance(parent, dict) else 'N/A'
-                child_name = child.get('display_value') if isinstance(child, dict) else 'N/A'
-                
-                print(f"      Sample: {parent_name} → {child_name}")
-            
-            if len(rels) > best_count:
-                best_count = len(rels)
-                best_type = rel_type
+            print(f"   ✅ '{rel_type}': Found {len(rels)} relationships")
+            found_relationships.extend(rels)
         else:
             print(f"   ⊘ '{rel_type}': No relationships found")
-            
     except Exception as e:
-        print(f"   ❌ '{rel_type}': Error - {str(e)[:100]}")
+        print(f"   ❌ '{rel_type}': Error - {str(e)}")
 
 print("\n" + "="*80)
 print("RESULTS:")
 print("="*80)
 
-if best_type and best_count > 0:
-    print(f"✅ FOUND APP-SERVER RELATIONSHIPS!")
-    print(f"   Best match: '{best_type}' with {best_count} relationships")
-    print(f"\n   Your CMDB DOES have app-server links!")
-    print(f"   Update snow_etl.py to use this relationship type.")
+if found_relationships:
+    print(f"✅ FOUND {len(found_relationships)} RELATIONSHIPS\n")
+    
+    # Analyze what these link to
+    parent_ids = [extract_sys_id(r.get('parent')) for r in found_relationships]
+    child_ids = [extract_sys_id(r.get('child')) for r in found_relationships]
+    
+    print("Checking if parents are applications...")
+    apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
+                     query=f"sys_idIN{','.join(set(parent_ids))}", limit=100)
+    if apps:
+        print(f"✅ Found {len(apps)} linked applications:")
+        for app in apps[:10]:
+            print(f"   - {extract_value(app.get('name'))}")
+    
+    print("\nChecking if children are applications...")
+    apps = query_snow('cmdb_ci_service', ['sys_id', 'name'], 
+                     query=f"sys_idIN{','.join(set(child_ids))}", limit=100)
+    if apps:
+        print(f"✅ Found {len(apps)} linked applications:")
+        for app in apps[:10]:
+            print(f"   - {extract_value(app.get('name'))}")
 else:
     print("❌ NO APP-SERVER RELATIONSHIPS FOUND")
-    print("\n   Possible reasons:")
-    print("   1. Your CMDB doesn't track app-to-server relationships")
-    print("   2. Relationships use a different naming convention")
-    print("   3. Apps link to virtual hosts or containers, not servers")
-    print("\n   Recommendation:")
-    print("   - Skip server loading in ETL (set servers to optional)")
-    print("   - Focus on application and usage data from AppDynamics")
-    print("   - Server mapping may not be needed for license tracking")
+    print("\nPossible reasons:")
+    print("  1. App-server relationships don't exist in your CMDB")
+    print("  2. The relationship types used don't link servers to apps")
+    print("  3. Need to check what relationship types actually exist")
+    print("\nSuggestion: Run 'list all relationship types' query:")
+    print("  Query: cmdb_rel_ci table with unique relationship types")
 
 print("="*80)
