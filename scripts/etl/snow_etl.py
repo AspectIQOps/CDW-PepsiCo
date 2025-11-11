@@ -257,41 +257,114 @@ def _upsert_server(conn, server):
         return None
 
 def fetch_and_load_servers(conn):
-    """Extract servers from ServiceNow and load into servers_dim"""
+    """Extract servers from ServiceNow and load into servers_dim
+    
+    OPTIMIZATION: Only fetch servers that are actually related to applications
+    in our applications_dim table to avoid pulling entire CMDB
+    """
     try:
         print("Fetching servers from ServiceNow...")
-        servers = fetch_snow_table('cmdb_ci_server', 
-            ['sys_id', 'name', 'ip_address', 'os', 'virtual'],
-            query='operational_status=1')
         
-        print(f"Retrieved {len(servers)} servers")
+        # First, get list of application sys_ids we care about
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT sn_sys_id FROM applications_dim WHERE sn_sys_id IS NOT NULL")
+        app_sys_ids = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        
+        if not app_sys_ids:
+            print("WARNING: No applications found in applications_dim. Load applications first.")
+            return 0
+        
+        print(f"Found {len(app_sys_ids)} applications to find servers for")
+        
+        # Strategy: Fetch servers in smaller batches by querying relationships first
+        # This is much more efficient than fetching all servers
+        print("Fetching application-server relationships to identify relevant servers...")
+        relationships = fetch_snow_table('cmdb_rel_ci',
+            ['parent', 'child', 'type'],
+            query='type.name=Runs on::Runs^parentIN' + ','.join(app_sys_ids[:100]))  # Batch first 100
+        
+        # Extract unique server sys_ids from relationships
+        server_sys_ids = set()
+        for rel in relationships:
+            child_sys_id = rel.get('child', {}).get('value') if isinstance(rel.get('child'), dict) else rel.get('child')
+            if child_sys_id:
+                server_sys_ids.add(child_sys_id)
+        
+        print(f"Identified {len(server_sys_ids)} unique servers from relationships")
+        
+        if not server_sys_ids:
+            print("No servers found in relationships")
+            return 0
+        
+        # Now fetch only those specific servers in batches
         success = 0
+        batch_size = 50
+        server_list = list(server_sys_ids)
         
-        for server in servers:
-            if _upsert_server(conn, server):
-                success += 1
+        for i in range(0, len(server_list), batch_size):
+            batch = server_list[i:i+batch_size]
+            query = f"sys_idIN{','.join(batch)}^operational_status=1"
+            
+            print(f"Fetching server batch {i//batch_size + 1}/{(len(server_list)-1)//batch_size + 1}")
+            servers = fetch_snow_table('cmdb_ci_server', 
+                ['sys_id', 'name', 'ip_address', 'os', 'virtual'],
+                query=query)
+            
+            for server in servers:
+                if _upsert_server(conn, server):
+                    success += 1
         
-        print(f"✅ Loaded {success}/{len(servers)} servers")
+        print(f"✅ Loaded {success} servers")
         return success
         
     except Exception as e:
         print(f"ERROR fetching servers: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
+
 def fetch_and_map_relationships(conn):
-    """Extract app-to-server relationships and populate app_server_mapping"""
+    """Extract app-to-server relationships and populate app_server_mapping
+    
+    OPTIMIZATION: Only fetch relationships for applications we have in our database
+    """
     try:
         print("Fetching application-server relationships...")
-        relationships = fetch_snow_table('cmdb_rel_ci',
-            ['parent', 'child', 'type'],
-            query='type.name=Runs on::Runs')
         
-        print(f"Retrieved {len(relationships)} relationships")
+        # Get list of applications we care about
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT sn_sys_id FROM applications_dim WHERE sn_sys_id IS NOT NULL")
+        app_sys_ids = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        
+        if not app_sys_ids:
+            print("WARNING: No applications found. Cannot map relationships.")
+            return 0
+        
+        print(f"Mapping relationships for {len(app_sys_ids)} applications")
+        
+        # Fetch relationships in batches to avoid URL length limits
+        all_relationships = []
+        batch_size = 100
+        
+        for i in range(0, len(app_sys_ids), batch_size):
+            batch = app_sys_ids[i:i+batch_size]
+            query = f"type.name=Runs on::Runs^parentIN{','.join(batch)}"
+            
+            print(f"Fetching relationship batch {i//batch_size + 1}/{(len(app_sys_ids)-1)//batch_size + 1}")
+            relationships = fetch_snow_table('cmdb_rel_ci',
+                ['parent', 'child', 'type'],
+                query=query)
+            all_relationships.extend(relationships)
+        
+        print(f"Retrieved {len(all_relationships)} relationships")
         
         cursor = conn.cursor()
         success = 0
         
-        for rel in relationships:
+        for rel in all_relationships:
             parent_sys_id = rel.get('parent', {}).get('value') if isinstance(rel.get('parent'), dict) else rel.get('parent')
             child_sys_id = rel.get('child', {}).get('value') if isinstance(rel.get('child'), dict) else rel.get('child')
             
@@ -323,6 +396,8 @@ def fetch_and_map_relationships(conn):
         
     except Exception as e:
         print(f"ERROR mapping relationships: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         return 0
 
@@ -370,9 +445,9 @@ def upsert_application(conn, svc):
         cursor.close()
 
 def run_snow_etl():
-    """Main ETL orchestration function"""
+    """Main ETL orchestration function - OPTIMIZED VERSION"""
     print("=" * 60)
-    print("ServiceNow ETL Starting")
+    print("ServiceNow ETL Starting (Optimized)")
     print("=" * 60)
     
     conn = None
@@ -394,8 +469,9 @@ def run_snow_etl():
         conn.commit()
         cursor.close()
         
-        # Step 3: Load applications
+        # Step 3: Load applications FIRST (this is our filter for everything else)
         print("\n[1/3] Loading applications from cmdb_ci_service...")
+        print("OPTIMIZATION: Fetching only active, operational applications")
         services = fetch_snow_table('cmdb_ci_service', 
             ['sys_id','name','owned_by','managed_by','u_sector','business_unit',
              'u_architecture_type','u_h_code','cost_center','support_group'], 
@@ -406,13 +482,15 @@ def run_snow_etl():
         print(f"✅ Applications: {success}/{len(services)}")
         total_rows += success
         
-        # Step 4: Load servers
+        # Step 4: Load ONLY servers related to our applications
         print("\n[2/3] Loading servers from cmdb_ci_server...")
+        print("OPTIMIZATION: Fetching only servers related to tracked applications")
         servers_loaded = fetch_and_load_servers(conn)
         total_rows += servers_loaded
         
-        # Step 5: Map relationships
+        # Step 5: Map relationships (now scoped to our applications)
         print("\n[3/3] Mapping application-server relationships...")
+        print("OPTIMIZATION: Fetching only relationships for tracked applications")
         relationships_mapped = fetch_and_map_relationships(conn)
         total_rows += relationships_mapped
         
