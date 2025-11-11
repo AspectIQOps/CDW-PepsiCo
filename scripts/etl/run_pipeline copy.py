@@ -32,22 +32,13 @@ def run_etl_script(script_name, description):
         result = subprocess.run(
             ["python3", script_path],
             check=True,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minute timeout per script
+            capture_output=False,
+            text=True
         )
-        print(result.stdout)
-        if result.stderr:
-            print(f"{Colors.YELLOW}{result.stderr}{Colors.NC}")
         print(f"{Colors.GREEN}✅ {description} completed successfully{Colors.NC}\n")
         return True
-    except subprocess.TimeoutExpired:
-        print(f"{Colors.RED}❌ {description} timed out after 5 minutes (possible infinite loop or deadlock){Colors.NC}")
-        return False
     except subprocess.CalledProcessError as e:
         print(f"{Colors.RED}❌ {description} failed with exit code {e.returncode}{Colors.NC}")
-        print(f"STDOUT: {e.stdout}")
-        print(f"STDERR: {e.stderr}")
         return False
     except FileNotFoundError:
         print(f"{Colors.RED}❌ Script not found: {script_path}{Colors.NC}")
