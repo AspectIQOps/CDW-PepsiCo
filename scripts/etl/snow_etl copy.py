@@ -138,42 +138,56 @@ def get_oauth_token():
     print(f"ERROR: {error_msg}")
     raise ValueError(error_msg)
 
+def get_auth_headers():
+    """Get authentication headers - OAuth or Basic Auth"""
+    # Try OAuth first if credentials available
+    if SN_CLIENT_ID and SN_CLIENT_SECRET:
+        try:
+            token = get_oauth_token()
+            return {
+                'Authorization': f'Bearer {token}',
+                'Accept': 'application/json'
+            }
+        except Exception as e:
+            print(f"⚠ OAuth failed: {str(e)[:100]}")
+            print("  Falling back to Basic Auth with client_id as username...")
+            # Fall through to basic auth
+
+    # Use basic auth (legacy or fallback)
+    return {'Accept': 'application/json'}
+
+def get_auth():
+    """Get authentication object for requests"""
+    # Priority 1: Try client_id/secret as username/password (some orgs use this pattern)
+    if SN_CLIENT_ID and SN_CLIENT_SECRET:
+        print("Using client_id/secret as Basic Auth credentials")
+        return HTTPBasicAuth(SN_CLIENT_ID, SN_CLIENT_SECRET)
+    # Priority 2: Traditional username/password
+    elif SN_USER and SN_PASS:
+        print("Using username/password for Basic Auth")
+        return HTTPBasicAuth(SN_USER, SN_PASS)
+    else:
+        return None
+
 def fetch_snow_table(table_name, fields, query=None):
     if not SN_INSTANCE:
         raise ValueError("ServiceNow instance not configured")
 
-    # Determine which authentication method to use
-    use_oauth = bool(SN_CLIENT_ID and SN_CLIENT_SECRET)
-    use_basic = bool(SN_USER and SN_PASS)
-
-    if not (use_oauth or use_basic):
+    if not ((SN_CLIENT_ID and SN_CLIENT_SECRET) or (SN_USER and SN_PASS)):
         raise ValueError("ServiceNow credentials missing - need either CLIENT_ID/SECRET or USER/PASS")
 
     params = {'sysparm_fields': ','.join(fields), 'sysparm_limit': 1000, 'sysparm_offset': 0}
     if query: params['sysparm_query'] = query
     all_records = []
 
-    # Get authentication - ONLY use one method at a time
-    if use_oauth:
-        # OAuth: Use Bearer token in headers, NO auth parameter
-        token = get_oauth_token()
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Accept': 'application/json'
-        }
-        auth = None
-        print("Using OAuth Bearer token authentication")
-    else:
-        # Basic Auth: Use auth parameter with username/password
-        headers = {'Accept': 'application/json'}
-        auth = HTTPBasicAuth(SN_USER, SN_PASS)
-        print("Using Basic Auth with username/password")
+    auth_headers = get_auth_headers()
+    auth = get_auth()
 
     while True:
         r = requests.get(
             f"{SN_BASE_URL}/{table_name}",
             auth=auth,
-            headers=headers,
+            headers=auth_headers,
             params=params,
             timeout=60
         )
