@@ -175,17 +175,17 @@ COMMENT ON COLUMN applications_dim.metadata IS 'Additional application data from
 -- Application-Server Mapping
 CREATE TABLE IF NOT EXISTS app_server_mapping (
     app_server_mapping_id SERIAL PRIMARY KEY,
-    app_cmdb_sys_id VARCHAR(32) NOT NULL,
-    server_cmdb_sys_id VARCHAR(32) NOT NULL,
+    app_id INTEGER NOT NULL,
+    server_id INTEGER NOT NULL,
     relationship_type VARCHAR(100),
     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (app_cmdb_sys_id) REFERENCES applications_dim(cmdb_sys_id) ON DELETE CASCADE,
-    FOREIGN KEY (server_cmdb_sys_id) REFERENCES servers_dim(cmdb_sys_id) ON DELETE CASCADE,
-    UNIQUE(app_cmdb_sys_id, server_cmdb_sys_id)
+    FOREIGN KEY (app_id) REFERENCES applications_dim(app_id) ON DELETE CASCADE,
+    FOREIGN KEY (server_id) REFERENCES servers_dim(server_id) ON DELETE CASCADE,
+    UNIQUE(app_id, server_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_app_server_mapping_app ON app_server_mapping(app_cmdb_sys_id);
-CREATE INDEX IF NOT EXISTS idx_app_server_mapping_server ON app_server_mapping(server_cmdb_sys_id);
+CREATE INDEX IF NOT EXISTS idx_app_server_mapping_app ON app_server_mapping(app_id);
+CREATE INDEX IF NOT EXISTS idx_app_server_mapping_server ON app_server_mapping(server_id);
 CREATE INDEX IF NOT EXISTS idx_app_server_mapping_rel_type ON app_server_mapping(relationship_type);
 
 -- ========================================
