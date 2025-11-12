@@ -1,22 +1,385 @@
 #!/usr/bin/env python3
 """
-ServiceNow ETL - OPTIMIZED to only fetch servers for AppDynamics-monitored applications
-Key Change: Filters to only AppD apps BEFORE querying for servers
+ServiceNow ETL - Production-Grade with Intelligent Load Strategy
+Auto-detects first run vs incremental and optimizes accordingly
 """
+import requests
+import psycopg2
+from psycopg2.extras import execute_values
+import os
+from datetime import datetime, timedelta
+import time
+import sys
 
-# [Keep all your imports and helper functions from lines 1-200]
+# ========================================
+# Configuration
+# ========================================
 
-def get_appd_monitored_app_sys_ids(conn):
-    """
-    Get ServiceNow sys_ids for applications that are monitored in AppDynamics
-    This is the KEY optimization - only fetch servers for apps we actually monitor
+DB_HOST = os.getenv('DB_HOST')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+
+SN_INSTANCE = os.getenv('SN_INSTANCE')
+SN_CLIENT_ID = os.getenv('SN_CLIENT_ID')
+SN_CLIENT_SECRET = os.getenv('SN_CLIENT_SECRET')
+
+# Fallback to basic auth if OAuth not available
+SN_USER = os.getenv('SN_USER')
+SN_PASS = os.getenv('SN_PASS')
+
+# Safety limits
+MAX_SERVERS_INITIAL_LOAD = 10000  # Prevent timeout on first run
+BATCH_SIZE_APPS = 500
+BATCH_SIZE_SERVERS = 250
+REQUEST_TIMEOUT = 60
+MAX_EXECUTION_TIME = 600  # 10 minutes total
+
+# ========================================
+# Authentication
+# ========================================
+
+_oauth_token_cache = {'token': None, 'expires_at': None}
+
+def get_oauth_token():
+    """Get OAuth 2.0 access token with caching"""
+    now = datetime.now()
     
-    Returns: List of sn_sys_id values for AppD-monitored apps
+    # Return cached token if valid
+    if _oauth_token_cache['token'] and _oauth_token_cache['expires_at']:
+        if now < _oauth_token_cache['expires_at'] - timedelta(seconds=30):
+            return _oauth_token_cache['token']
+    
+    # Request new token
+    token_url = f"https://{SN_INSTANCE}.service-now.com/oauth_token.do"
+    
+    try:
+        response = requests.post(
+            token_url,
+            auth=(SN_CLIENT_ID, SN_CLIENT_SECRET),
+            data={'grant_type': 'client_credentials'},
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        token_data = response.json()
+        access_token = token_data.get('access_token')
+        expires_in = token_data.get('expires_in', 1800)
+        
+        if not access_token:
+            raise ValueError("No access_token in response")
+        
+        # Cache token
+        _oauth_token_cache['token'] = access_token
+        _oauth_token_cache['expires_at'] = now + timedelta(seconds=expires_in)
+        
+        return access_token
+        
+    except Exception as e:
+        print(f"❌ OAuth authentication failed: {e}")
+        raise
+
+def get_auth_headers():
+    """Get authentication headers (OAuth or Basic)"""
+    if SN_CLIENT_ID and SN_CLIENT_SECRET:
+        token = get_oauth_token()
+        return {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    elif SN_USER and SN_PASS:
+        import base64
+        creds = base64.b64encode(f"{SN_USER}:{SN_PASS}".encode()).decode()
+        return {
+            "Authorization": f"Basic {creds}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    else:
+        raise ValueError("No ServiceNow credentials configured")
+
+# ========================================
+# API Helpers
+# ========================================
+
+def query_snow_paginated(table, fields, query=None, limit=100, max_records=None):
+    """
+    Paginated ServiceNow API query with timeout protection
+    
+    Args:
+        table: ServiceNow table name
+        fields: List of field names to retrieve
+        query: ServiceNow query string (optional)
+        limit: Page size (default 100)
+        max_records: Maximum records to fetch (safety limit)
+    
+    Returns:
+        List of records
+    """
+    base_url = f"https://{SN_INSTANCE}.service-now.com/api/now/table/{table}"
+    headers = get_auth_headers()
+    
+    all_records = []
+    offset = 0
+    batch_count = 0
+    start_time = time.time()
+    
+    while True:
+        # Timeout check
+        elapsed = time.time() - start_time
+        if elapsed > MAX_EXECUTION_TIME:
+            print(f"  ⚠️  Query timeout after {elapsed:.0f}s. Returning {len(all_records)} records.")
+            break
+        
+        # Max records check
+        if max_records and len(all_records) >= max_records:
+            print(f"  ⚠️  Reached max records limit ({max_records}). Stopping fetch.")
+            break
+        
+        params = {
+            "sysparm_fields": ','.join(fields),
+            "sysparm_limit": limit,
+            "sysparm_offset": offset,
+            "sysparm_exclude_reference_link": "true",
+            "sysparm_no_count": "true"
+        }
+        if query:
+            params["sysparm_query"] = query
+        
+        try:
+            response = requests.get(base_url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            
+            records = response.json().get("result", [])
+            if not records:
+                break
+            
+            all_records.extend(records)
+            batch_count += 1
+            offset += limit
+            
+            # Progress update
+            if batch_count % 5 == 0:
+                rate = len(all_records) / elapsed if elapsed > 0 else 0
+                print(f"    Fetched {len(all_records):,} records ({rate:.0f}/sec)...")
+            
+        except requests.exceptions.Timeout:
+            print(f"  ⚠️  Request timeout at offset {offset}. Returning {len(all_records)} records.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"  ⚠️  Request error: {e}")
+            break
+        except Exception as e:
+            print(f"  ❌ Unexpected error: {e}")
+            break
+    
+    return all_records
+
+def extract_sys_id(item):
+    """Extract sys_id from dict or string"""
+    if isinstance(item, dict):
+        return item.get('value') or item.get('sys_id')
+    return item
+
+def safe_truncate(value, max_length, field_name="field"):
+    """Safely truncate string values with logging"""
+    if not value:
+        return None
+    s = str(value)
+    if len(s) > max_length:
+        return s[:max_length]
+    return s
+
+# ========================================
+# Load Strategy Detection
+# ========================================
+
+def determine_load_strategy(conn):
+    """
+    Intelligently determine which load strategy to use
+    
+    Returns:
+        'INITIAL_FULL': First run or incomplete data - load with filters
+        'INCREMENTAL_OPTIMIZED': Normal operation - only AppD-related servers
     """
     cursor = conn.cursor()
     
-    # Query applications that have BOTH AppD and ServiceNow data
-    # These are the ~128 apps we actually care about for licensing
+    try:
+        # Check for AppD applications
+        cursor.execute("""
+            SELECT COUNT(*) FROM applications_dim 
+            WHERE appd_application_id IS NOT NULL
+        """)
+        appd_count = cursor.fetchone()[0]
+        
+        # Check total applications
+        cursor.execute("SELECT COUNT(*) FROM applications_dim")
+        total_count = cursor.fetchone()[0]
+        
+        # Check for matched applications (reconciliation completed)
+        cursor.execute("""
+            SELECT COUNT(*) FROM applications_dim 
+            WHERE appd_application_id IS NOT NULL 
+            AND sn_sys_id IS NOT NULL
+        """)
+        matched_count = cursor.fetchone()[0]
+        
+        cursor.close()
+        
+        # Decision logic
+        if total_count == 0:
+            return 'INITIAL_FULL', f"Empty database - first run"
+        elif appd_count == 0:
+            return 'INITIAL_FULL', f"No AppDynamics data yet ({total_count} SN apps exist)"
+        elif matched_count == 0:
+            return 'INITIAL_FULL', f"No matched apps yet (reconciliation not run)"
+        elif matched_count < 50:
+            return 'INITIAL_FULL', f"Only {matched_count} matched apps - incomplete data"
+        else:
+            return 'INCREMENTAL_OPTIMIZED', f"{matched_count} matched apps - using optimized mode"
+    
+    except Exception as e:
+        print(f"  ⚠️  Error detecting strategy: {e}")
+        return 'INITIAL_FULL', "Error checking database - defaulting to initial load"
+
+# ========================================
+# Initial Load Strategy
+# ========================================
+
+def load_applications_full(conn):
+    """Load all ServiceNow applications (needed for enrichment data)"""
+    print("\n[1/3] Loading ServiceNow Applications (All)")
+    print("-" * 70)
+    
+    # Query for operational applications
+    query = "operational_status=1^ORoperational_status=2"
+    
+    apps = query_snow_paginated(
+        table='cmdb_ci_service',
+        fields=['sys_id', 'name', 'short_description', 'operational_status'],
+        query=query,
+        limit=250
+    )
+    
+    if not apps:
+        print("  ⚠️  No applications found")
+        return 0
+    
+    print(f"  ✓ Retrieved {len(apps):,} applications")
+    
+    # Batch upsert
+    cursor = conn.cursor()
+    records = []
+    
+    for app in apps:
+        sys_id = extract_sys_id(app.get('sys_id'))
+        name = safe_truncate(extract_sys_id(app.get('name')), 255, "app name")
+        
+        if sys_id and name:
+            records.append((sys_id, name))
+    
+    if records:
+        insert_query = """
+            INSERT INTO applications_dim (sn_sys_id, sn_service_name)
+            VALUES %s
+            ON CONFLICT (sn_sys_id) DO UPDATE SET
+                sn_service_name = EXCLUDED.sn_service_name,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        execute_values(cursor, insert_query, records, page_size=BATCH_SIZE_APPS)
+        conn.commit()
+        print(f"  ✓ Upserted {len(records):,} applications")
+    
+    cursor.close()
+    return len(records)
+
+def load_servers_filtered_initial(conn):
+    """
+    Load servers with smart filtering for initial run
+    Strategy: Only operational, recently updated servers
+    """
+    print("\n[2/3] Loading Servers (Filtered Initial Load)")
+    print("-" * 70)
+    print(f"  Strategy: Operational servers updated in last 90 days")
+    print(f"  Safety limit: {MAX_SERVERS_INITIAL_LOAD:,} servers max")
+    
+    # Calculate date 90 days ago
+    date_90_days_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+    
+    # Query for operational, recently updated servers
+    query = f"operational_status=1^sys_updated_on>={date_90_days_ago}"
+    
+    servers = query_snow_paginated(
+        table='cmdb_ci_server',
+        fields=['sys_id', 'name', 'os', 'ip_address', 'virtual'],
+        query=query,
+        limit=250,
+        max_records=MAX_SERVERS_INITIAL_LOAD
+    )
+    
+    if not servers:
+        print("  ⚠️  No servers found")
+        return 0
+    
+    print(f"  ✓ Retrieved {len(servers):,} servers")
+    
+    # Batch upsert
+    cursor = conn.cursor()
+    success = 0
+    
+    for server in servers:
+        try:
+            sys_id = extract_sys_id(server.get('sys_id'))
+            name = safe_truncate(extract_sys_id(server.get('name')), 255, "server name")
+            os_type = safe_truncate(extract_sys_id(server.get('os')), 255, "OS")
+            ip_address = safe_truncate(extract_sys_id(server.get('ip_address')), 100, "IP")
+            
+            virtual_raw = extract_sys_id(server.get('virtual'))
+            is_virtual = virtual_raw in ['true', 'True', '1', 'yes', True]
+            
+            if sys_id and name:
+                cursor.execute("""
+                    INSERT INTO servers_dim (sn_sys_id, server_name, os, ip_address, is_virtual)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (sn_sys_id) DO UPDATE SET
+                        server_name = EXCLUDED.server_name,
+                        os = EXCLUDED.os,
+                        ip_address = EXCLUDED.ip_address,
+                        is_virtual = EXCLUDED.is_virtual,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (sys_id, name, os_type, ip_address, is_virtual))
+                success += 1
+                
+                if success % 500 == 0:
+                    conn.commit()
+                    print(f"    Committed {success:,} servers...")
+        
+        except Exception as e:
+            print(f"    ⚠️  Error upserting server: {str(e)[:100]}")
+            conn.rollback()
+    
+    conn.commit()
+    cursor.close()
+    
+    print(f"  ✓ Upserted {success:,} servers")
+    return success
+
+# ========================================
+# Incremental/Optimized Load Strategy
+# ========================================
+
+def load_servers_optimized(conn):
+    """
+    Load ONLY servers for AppDynamics-monitored applications
+    This is the production optimization strategy
+    """
+    print("\n[2/3] Loading Servers (Optimized for AppD Apps)")
+    print("-" * 70)
+    
+    cursor = conn.cursor()
+    
+    # Get matched AppD applications
     cursor.execute("""
         SELECT sn_sys_id, appd_application_name, sn_service_name
         FROM applications_dim
@@ -25,146 +388,82 @@ def get_appd_monitored_app_sys_ids(conn):
     """)
     
     results = cursor.fetchall()
-    cursor.close()
     
     if not results:
-        print("⚠️  No AppDynamics-monitored apps found with ServiceNow links")
-        print("   This means reconciliation hasn't run yet or no apps matched")
-        print("   Will try using ALL applications as fallback")
-        return None
+        print("  ⚠️  No matched AppD applications found")
+        print("     Run reconciliation first, or use initial load mode")
+        cursor.close()
+        return 0
     
     app_sys_ids = [row[0] for row in results]
-    print(f"✓ Found {len(app_sys_ids)} AppDynamics-monitored applications with ServiceNow links")
-    print(f"  (Will ONLY fetch servers for these {len(app_sys_ids)} apps, not all 19,944)")
+    print(f"  ✓ Found {len(app_sys_ids)} AppD-monitored applications")
+    print(f"    (Only fetching servers for these apps, not all {len(app_sys_ids):,})")
     
-    # Show some examples
-    for row in results[:5]:
-        print(f"    • {row[1]} → {row[2]}")
-    if len(results) > 5:
-        print(f"    ... and {len(results) - 5} more")
-    
-    return app_sys_ids
-
-
-def fetch_and_load_servers_for_appd_apps(conn, access_token, instance):
-    """
-    Fetch servers ONLY for AppDynamics-monitored applications
-    This dramatically reduces the query scope from 19,944 apps to ~128 apps
-    
-    Expected reduction: 67,500 servers → ~500-2000 servers
-    """
-    print("Fetching servers for AppDynamics-monitored applications...")
-    
-    # Step 1: Get list of AppD-monitored app sys_ids
-    app_sys_ids = get_appd_monitored_app_sys_ids(conn)
-    
-    if not app_sys_ids:
-        # Fallback: Use applications that have AppD data (even if not matched to ServiceNow yet)
-        print("⚠️  Using fallback: querying by AppD application names")
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT DISTINCT sn_sys_id
-            FROM applications_dim
-            WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL
-        """)
-        results = cursor.fetchall()
-        app_sys_ids = [row[0] for row in results if row[0]]
-        cursor.close()
-        
-        if not app_sys_ids:
-            print("❌ Cannot find any applications to query servers for")
-            print("   Possible reasons:")
-            print("   1. AppDynamics ETL hasn't run yet")
-            print("   2. Reconciliation hasn't matched any apps")
-            print("   3. No AppD apps have ServiceNow sys_ids")
-            return 0
-    
-    print(f"\n📊 Query scope: {len(app_sys_ids)} applications (not 19,944!)")
-    
-    # Step 2: Query relationships for ONLY these AppD apps
-    print("\n[Step 1/2] Fetching relationships for AppD-monitored apps...")
+    # Fetch relationships for AppD apps only
+    print(f"\n  Step 1: Fetching app-to-server relationships...")
     all_relationships = []
     batch_size = 100
     
     for i in range(0, len(app_sys_ids), batch_size):
         batch = app_sys_ids[i:i+batch_size]
-        
-        # Use "Depends on::Used by" as discovered in diagnostics
         query = f"type.name=Depends on::Used by^parentIN{','.join(batch)}"
         
-        print(f"  Querying relationship batch {i//batch_size + 1}/{(len(app_sys_ids)-1)//batch_size + 1}")
-        
         rels = query_snow_paginated(
-            access_token, instance,
             table='cmdb_rel_ci',
             fields=['parent', 'child', 'type'],
             query=query,
             limit=250
         )
         all_relationships.extend(rels)
+        
+        if (i // batch_size + 1) % 5 == 0:
+            print(f"    Processed {i + len(batch)}/{len(app_sys_ids)} apps...")
     
-    print(f"✓ Retrieved {len(all_relationships)} total relationships")
+    print(f"  ✓ Retrieved {len(all_relationships):,} relationships")
     
-    if len(all_relationships) == 0:
-        print("⚠️  No 'Depends on::Used by' relationships found")
-        print("   Your CMDB may not track app-to-server relationships")
-        print("   Continuing without server data...")
+    if not all_relationships:
+        print("  ⚠️  No relationships found - CMDB may not track app-to-server links")
+        cursor.close()
         return 0
     
-    # Step 3: Extract unique server sys_ids
+    # Extract unique server sys_ids
     server_sys_ids = set()
     for rel in all_relationships:
         child = rel.get('child', {})
-        child_sys_id = child.get('value') if isinstance(child, dict) else child
+        child_sys_id = extract_sys_id(child)
         if child_sys_id:
             server_sys_ids.add(child_sys_id)
     
-    print(f"✓ Identified {len(server_sys_ids)} unique servers from relationships")
+    print(f"  ✓ Identified {len(server_sys_ids):,} unique servers")
     
-    if len(server_sys_ids) == 0:
-        print("⚠️  No servers identified in relationships")
-        return 0
-    
-    # Step 4: Fetch ONLY these specific servers
-    print(f"\n[Step 2/2] Fetching {len(server_sys_ids)} servers...")
+    # Fetch only these servers
+    print(f"\n  Step 2: Fetching {len(server_sys_ids):,} servers...")
     success = 0
-    batch_size = 50
     server_list = list(server_sys_ids)
+    batch_size = 50
     
     for i in range(0, len(server_list), batch_size):
         batch = server_list[i:i+batch_size]
         query = f"sys_idIN{','.join(batch)}"
         
-        if (i // batch_size) % 10 == 0:
-            print(f"  Fetching server batch {i//batch_size + 1}/{(len(server_list)-1)//batch_size + 1}")
-        
         servers = query_snow_paginated(
-            access_token, instance,
             table='cmdb_ci_server',
-            fields=['sys_id', 'name', 'ip_address', 'os', 'virtual'],
+            fields=['sys_id', 'name', 'os', 'ip_address', 'virtual'],
             query=query,
             limit=250
         )
         
-        # Upsert immediately (don't accumulate in memory)
         for server in servers:
             try:
-                cursor = conn.cursor()
-                
-                server_sys_id = extract_sys_id(server.get('sys_id'))
+                sys_id = extract_sys_id(server.get('sys_id'))
                 name = safe_truncate(extract_sys_id(server.get('name')), 255, "server name")
-                os_type = safe_truncate(extract_sys_id(server.get('os')), 255, "OS")  # NOW 255!
-                ip_address = safe_truncate(extract_sys_id(server.get('ip_address')), 100, "IP")  # NOW 100!
+                os_type = safe_truncate(extract_sys_id(server.get('os')), 255, "OS")
+                ip_address = safe_truncate(extract_sys_id(server.get('ip_address')), 100, "IP")
                 
                 virtual_raw = extract_sys_id(server.get('virtual'))
-                if virtual_raw in ['true', 'True', '1', 'yes']:
-                    is_virtual = True
-                elif virtual_raw in ['false', 'False', '0', 'no']:
-                    is_virtual = False
-                else:
-                    is_virtual = False
+                is_virtual = virtual_raw in ['true', 'True', '1', 'yes', True]
                 
-                if server_sys_id and name:
+                if sys_id and name:
                     cursor.execute("""
                         INSERT INTO servers_dim (sn_sys_id, server_name, os, ip_address, is_virtual)
                         VALUES (%s, %s, %s, %s, %s)
@@ -174,77 +473,224 @@ def fetch_and_load_servers_for_appd_apps(conn, access_token, instance):
                             ip_address = EXCLUDED.ip_address,
                             is_virtual = EXCLUDED.is_virtual,
                             updated_at = CURRENT_TIMESTAMP
-                    """, (server_sys_id, name, os_type, ip_address, is_virtual))
-                    conn.commit()
+                    """, (sys_id, name, os_type, ip_address, is_virtual))
                     success += 1
-                
-                cursor.close()
-                
+            
             except Exception as e:
-                print(f"    ⚠️  Error upserting server: {str(e)[:100]}")
+                print(f"    ⚠️  Error: {str(e)[:100]}")
                 conn.rollback()
+        
+        if (i // batch_size + 1) % 10 == 0:
+            conn.commit()
+            print(f"    Committed {success:,} servers...")
     
-    print(f"✓ Loaded {success} servers (only for AppD-monitored apps)")
+    conn.commit()
+    cursor.close()
+    
+    print(f"  ✓ Upserted {success:,} servers (only for AppD apps)")
     return success
 
+# ========================================
+# Relationships (Common to Both Strategies)
+# ========================================
 
-def safe_truncate(value, max_length, field_name="field"):
-    """Safely truncate string values"""
-    if not value:
-        return None
-    s = str(value)
-    if len(s) > max_length:
-        return s[:max_length]
-    return s
+def load_relationships(conn):
+    """Load app-to-server relationship mappings"""
+    print("\n[3/3] Loading Application-Server Relationships")
+    print("-" * 70)
+    
+    cursor = conn.cursor()
+    
+    # Get all apps and servers from database
+    cursor.execute("SELECT app_id, sn_sys_id FROM applications_dim WHERE sn_sys_id IS NOT NULL")
+    app_map = {row[1]: row[0] for row in cursor.fetchall()}
+    
+    cursor.execute("SELECT server_id, sn_sys_id FROM servers_dim WHERE sn_sys_id IS NOT NULL")
+    server_map = {row[1]: row[0] for row in cursor.fetchall()}
+    
+    if not app_map or not server_map:
+        print("  ⚠️  No apps or servers to map")
+        cursor.close()
+        return 0
+    
+    # Fetch relationships
+    app_sys_ids = list(app_map.keys())
+    all_relationships = []
+    batch_size = 100
+    
+    for i in range(0, len(app_sys_ids), batch_size):
+        batch = app_sys_ids[i:i+batch_size]
+        query = f"type.name=Depends on::Used by^parentIN{','.join(batch)}"
+        
+        rels = query_snow_paginated(
+            table='cmdb_rel_ci',
+            fields=['parent', 'child', 'type'],
+            query=query,
+            limit=250
+        )
+        all_relationships.extend(rels)
+    
+    print(f"  ✓ Retrieved {len(all_relationships):,} relationships")
+    
+    # Map to database IDs
+    records = []
+    for rel in all_relationships:
+        parent_sys_id = extract_sys_id(rel.get('parent'))
+        child_sys_id = extract_sys_id(rel.get('child'))
+        rel_type = safe_truncate(extract_sys_id(rel.get('type')), 100, "relationship")
+        
+        app_id = app_map.get(parent_sys_id)
+        server_id = server_map.get(child_sys_id)
+        
+        if app_id and server_id:
+            records.append((app_id, server_id, rel_type or 'Unknown'))
+    
+    if records:
+        insert_query = """
+            INSERT INTO app_server_mapping (app_id, server_id, relationship_type)
+            VALUES %s
+            ON CONFLICT (app_id, server_id) DO UPDATE SET
+                relationship_type = EXCLUDED.relationship_type,
+                created_at = CURRENT_TIMESTAMP
+        """
+        execute_values(cursor, insert_query, records)
+        conn.commit()
+        print(f"  ✓ Mapped {len(records):,} app-server relationships")
+    
+    cursor.close()
+    return len(records)
 
+# ========================================
+# Main Orchestration
+# ========================================
 
 def main():
     """
-    Main ServiceNow ETL - OPTIMIZED VERSION
-    
-    Key Changes:
-    1. Loads ALL ServiceNow apps (for enrichment data - owner, sector, h_code)
-    2. Identifies which apps are monitored in AppDynamics (~128 apps)
-    3. ONLY fetches servers for those AppD-monitored apps
-    4. Expected: 500-2000 servers instead of 67,500
+    Production-grade ServiceNow ETL with intelligent load strategy
     """
-    print("="*70)
-    print("ServiceNow CMDB ETL (AppDynamics-Optimized)")
-    print("="*70)
+    print("=" * 70)
+    print("ServiceNow CMDB ETL - Production Grade")
+    print("=" * 70)
     print()
     
-    # [Keep your existing credential loading code]
+    # Validate credentials
+    if not SN_INSTANCE:
+        print("❌ SN_INSTANCE not configured")
+        sys.exit(1)
+    
+    if not (SN_CLIENT_ID and SN_CLIENT_SECRET) and not (SN_USER and SN_PASS):
+        print("❌ No authentication credentials configured")
+        print("   Set either SN_CLIENT_ID/SN_CLIENT_SECRET or SN_USER/SN_PASS")
+        sys.exit(1)
+    
+    if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
+        print("❌ Database credentials not configured")
+        sys.exit(1)
+    
+    print(f"ServiceNow Instance: {SN_INSTANCE}")
+    print(f"Authentication: {'OAuth 2.0' if SN_CLIENT_ID else 'Basic Auth'}")
+    print()
     
     # Connect to database
-    conn = psycopg2.connect(...)
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
+        print("✓ Database connected")
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        sys.exit(1)
+    
+    # Log ETL start
+    run_id = None
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO etl_execution_log (job_name, started_at, status)
+            VALUES ('snow_etl', NOW(), 'running')
+            RETURNING run_id
+        """)
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️  Could not log ETL start: {e}")
+    finally:
+        cursor.close()
     
     try:
-        # Step 1: Load ALL applications (for enrichment)
-        print("\n[1/3] Loading ALL ServiceNow applications...")
-        print("      (These provide owner, sector, h_code data for enrichment)")
-        apps = get_applications(access_token, instance)
-        upsert_applications_batched(conn, apps, batch_size=500)
+        # Determine load strategy
+        print("\n🔍 Analyzing Database State...")
+        print("-" * 70)
+        strategy, reason = determine_load_strategy(conn)
+        print(f"  Strategy: {strategy}")
+        print(f"  Reason: {reason}")
         
-        # Step 2: Load servers ONLY for AppDynamics-monitored apps
-        print("\n[2/3] Loading servers for AppDynamics-monitored applications...")
-        print("      (This is the KEY optimization - not loading all 67,500 servers!)")
-        servers_loaded = fetch_and_load_servers_for_appd_apps(conn, access_token, instance)
+        # Execute appropriate strategy
+        if strategy == 'INITIAL_FULL':
+            print(f"\n🆕 INITIAL LOAD MODE")
+            print("=" * 70)
+            apps_loaded = load_applications_full(conn)
+            servers_loaded = load_servers_filtered_initial(conn)
+            relationships_loaded = load_relationships(conn)
         
-        # Step 3: Map relationships
-        print("\n[3/3] Mapping application-server relationships...")
-        relationships_mapped = fetch_and_map_relationships(conn, access_token, instance)
+        else:  # INCREMENTAL_OPTIMIZED
+            print(f"\n🔄 OPTIMIZED MODE (AppD Apps Only)")
+            print("=" * 70)
+            apps_loaded = load_applications_full(conn)  # Still load all apps for enrichment
+            servers_loaded = load_servers_optimized(conn)
+            relationships_loaded = load_relationships(conn)
         
-        print("="*70)
-        print(f"✅ ServiceNow ETL Complete (Optimized)")
-        print(f"   • Applications: {len(apps)}")
-        print(f"   • Servers: {servers_loaded} (only for AppD apps)")
-        print(f"   • Relationships: {relationships_mapped}")
-        print("="*70)
+        # Update ETL log
+        if run_id:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE etl_execution_log 
+                SET finished_at = NOW(), 
+                    status = 'success',
+                    rows_ingested = %s
+                WHERE run_id = %s
+            """, (apps_loaded + servers_loaded + relationships_loaded, run_id))
+            conn.commit()
+            cursor.close()
+        
+        # Summary
+        print("\n" + "=" * 70)
+        print("✅ ServiceNow ETL Complete")
+        print("=" * 70)
+        print(f"  Applications: {apps_loaded:,}")
+        print(f"  Servers: {servers_loaded:,}")
+        print(f"  Relationships: {relationships_loaded:,}")
+        print(f"  Strategy: {strategy}")
+        print("=" * 70)
         
     except Exception as e:
-        print(f"❌ FATAL: {e}")
+        print("\n" + "=" * 70)
+        print(f"❌ FATAL ERROR: {e}")
+        print("=" * 70)
         import traceback
         traceback.print_exc()
+        
+        # Update ETL log with error
+        if run_id:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE etl_execution_log 
+                    SET finished_at = NOW(), 
+                        status = 'failed',
+                        error_message = %s
+                    WHERE run_id = %s
+                """, (str(e), run_id))
+                conn.commit()
+                cursor.close()
+            except:
+                pass
+        
+        sys.exit(1)
+    
     finally:
         conn.close()
 

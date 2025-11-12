@@ -104,10 +104,12 @@ def get_conn():
                 user=DB_USER,
                 password=DB_PASSWORD
             )
-        except:
+        except Exception as e:
             if i < 4:
+                print(f"  ⚠️  Database connection attempt {i+1}/5 failed, retrying...")
                 time.sleep(2**i)
             else:
+                print(f"  ❌ Database connection failed after 5 attempts: {e}")
                 raise
 
 def fetch_applications():
@@ -146,6 +148,29 @@ def fetch_application_nodes(app_id):
         print(f"⚠️  Failed to fetch nodes for app {app_id}: {e}")
         return 0
 
+def fetch_all_nodes_batch(app_ids):
+    """
+    Fetch node counts for multiple applications efficiently
+    Returns dict mapping app_id -> node_count
+    """
+    print("📊 Fetching node counts for all applications...")
+    node_counts = {}
+    
+    for i, app_id in enumerate(app_ids):
+        try:
+            node_counts[app_id] = fetch_application_nodes(app_id)
+            
+            # Progress indicator
+            if (i + 1) % 10 == 0:
+                print(f"  Fetched node counts for {i + 1}/{len(app_ids)} apps...")
+        
+        except Exception as e:
+            print(f"  ⚠️  Failed to fetch nodes for app {app_id}: {e}")
+            node_counts[app_id] = 0
+    
+    print(f"✅ Fetched node counts for {len(node_counts)} applications")
+    return node_counts
+
 def determine_architecture(node_count, tier_count):
     """
     Heuristic to determine if application is Monolith or Microservices
@@ -182,7 +207,7 @@ def determine_license_tier(app_name, description=""):
     # Default to Pro
     return 'Pro'
 
-def upsert_applications(conn, apps):
+def upsert_applications(conn, apps, node_counts):
     """
     Upsert applications from AppDynamics into applications_dim
     Returns mapping of AppD app_id to database app_id
@@ -197,9 +222,11 @@ def upsert_applications(conn, apps):
         appd_name = app.get('name')
         description = app.get('description', '')
 
-        # Get node count (tier count is in the app data)
+        # Get node count from batch fetch
+        node_count = node_counts.get(appd_id, 0)
+        
+        # Get tier count from app data
         tier_count = len(app.get('tiers', []))
-        node_count = fetch_application_nodes(appd_id)
 
         # Determine architecture
         architecture_id = determine_architecture(node_count, tier_count)
@@ -533,25 +560,29 @@ def run_appd_etl():
         if not apps:
             raise ValueError("No applications fetched from AppDynamics")
 
-        # Step 4: Upsert applications to database
-        app_id_map = upsert_applications(conn, apps)
+        # Step 4: Batch fetch node counts (optimization)
+        app_ids = [app.get('id') for app in apps]
+        node_counts = fetch_all_nodes_batch(app_ids)
 
-        # Step 5: Generate usage data based on application metadata
+        # Step 5: Upsert applications to database
+        app_id_map = upsert_applications(conn, apps, node_counts)
+
+        # Step 6: Generate usage data based on application metadata
         usage_rows = generate_usage_data(conn, app_id_map)
 
-        # Step 6: Calculate costs from usage
+        # Step 7: Calculate costs from usage
         cost_rows = calculate_costs(conn)
 
-        # Step 7: Generate chargeback records
+        # Step 8: Generate chargeback records
         chargeback_rows = generate_chargeback(conn)
 
-        # Step 8: Generate forecasts
+        # Step 9: Generate forecasts
         forecast_rows = generate_forecasts(conn)
 
-        # Step 9: Refresh dashboard views
+        # Step 10: Refresh dashboard views
         refresh_dashboard_views(conn)
 
-        # Step 10: Update ETL log
+        # Step 11: Update ETL log
         cur = conn.cursor()
         cur.execute("""
             UPDATE etl_execution_log
