@@ -261,7 +261,7 @@
         {
           "datasource": "PepsiCo AppDynamics Licensing",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as application,\n  lu.tier,\n  COALESCE(SUM(lu.units_consumed), 0) as units\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_application_name, lu.tier\nORDER BY SUM(lu.units_consumed) DESC",
+          "rawSql": "SELECT \n  a.appd_controller,\n  a.appd_application_name as application,\n  lu.tier,\n  COALESCE(SUM(lu.units_consumed), 0) as units\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_controller, a.appd_application_name, lu.tier\nORDER BY SUM(lu.units_consumed) DESC",
           "refId": "A"
         }
       ],

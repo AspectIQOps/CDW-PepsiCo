@@ -290,7 +290,7 @@
         {
           "datasource": "PepsiCo AppDynamics Licensing",
           "format": "table",
-          "rawSql": "WITH daily_costs AS (\n  SELECT \n    a.appd_application_name,\n    s.sector_name,\n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  LEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\n  WHERE lc.ts >= $__timeFrom()::timestamptz\n    AND lc.ts <= $__timeTo()::timestamptz\n  GROUP BY a.appd_application_name, s.sector_name, DATE(lc.ts)\n)\nSELECT \n  appd_application_name as \"Application\",\n  COALESCE(sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(daily_cost), 0) as \"Total\",\n  COALESCE(AVG(daily_cost), 0) as \"Avg Daily\",\n  COALESCE(MIN(daily_cost), 0) as \"Min\",\n  COALESCE(MAX(daily_cost), 0) as \"Max\"\nFROM daily_costs\nGROUP BY appd_application_name, sector_name\nORDER BY \"Total\" DESC",
+          "rawSql": "WITH daily_costs AS (\n  SELECT \n    a.appd_controller,\n    a.appd_application_name,\n    s.sector_name,\n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  LEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\n  WHERE lc.ts >= $__timeFrom()::timestamptz\n    AND lc.ts <= $__timeTo()::timestamptz\n  GROUP BY a.appd_controller, a.appd_application_name, s.sector_name, DATE(lc.ts)\n)\nSELECT \n  appd_controller,\n  appd_application_name as \"Application\",\n  COALESCE(sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(daily_cost), 0) as \"Total\",\n  COALESCE(AVG(daily_cost), 0) as \"Avg Daily\",\n  COALESCE(MIN(daily_cost), 0) as \"Min\",\n  COALESCE(MAX(daily_cost), 0) as \"Max\"\nFROM daily_costs\nGROUP BY appd_controller, appd_application_name, sector_name\nORDER BY \"Total\" DESC",
           "refId": "A"
         }
       ],
@@ -544,7 +544,7 @@
         {
           "datasource": "PepsiCo AppDynamics Licensing",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  TO_CHAR(DATE(lc.ts), 'YYYY-MM-DD') as \"Date\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\nGROUP BY a.appd_application_name, DATE(lc.ts)\nORDER BY a.appd_application_name, DATE(lc.ts)",
+          "rawSql": "SELECT \n  a.appd_controller,\n  a.appd_application_name as \"Application\",\n  TO_CHAR(DATE(lc.ts), 'YYYY-MM-DD') as \"Date\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\nGROUP BY a.appd_controller, a.appd_application_name, DATE(lc.ts)\nORDER BY a.appd_controller, a.appd_application_name, DATE(lc.ts)",
           "refId": "A"
         }
       ],

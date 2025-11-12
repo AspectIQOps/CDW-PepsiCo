@@ -149,8 +149,9 @@ CREATE TABLE IF NOT EXISTS servers_dim (
 -- Applications (merged AppD + ServiceNow data)
 CREATE TABLE IF NOT EXISTS applications_dim (
     app_id SERIAL PRIMARY KEY,
-    appd_application_id VARCHAR(100) UNIQUE,
+    appd_application_id VARCHAR(100),
     appd_application_name VARCHAR(255),
+    appd_controller VARCHAR(255),
     sn_sys_id VARCHAR(50) UNIQUE,
     sn_service_name VARCHAR(255),
     h_code VARCHAR(50),
@@ -161,15 +162,18 @@ CREATE TABLE IF NOT EXISTS applications_dim (
     support_group VARCHAR(255),
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(appd_application_id, appd_controller)
 );
 
 CREATE INDEX IF NOT EXISTS idx_apps_appd_name ON applications_dim(appd_application_name);
 CREATE INDEX IF NOT EXISTS idx_apps_sn_name ON applications_dim(sn_service_name);
 CREATE INDEX IF NOT EXISTS idx_apps_owner ON applications_dim(owner_id);
 CREATE INDEX IF NOT EXISTS idx_apps_sector ON applications_dim(sector_id);
+CREATE INDEX IF NOT EXISTS idx_apps_controller ON applications_dim(appd_controller);
 
 COMMENT ON COLUMN applications_dim.license_tier IS 'AppDynamics license tier - Peak or Pro (SoW Section 2.1)';
+COMMENT ON COLUMN applications_dim.appd_controller IS 'AppDynamics controller hostname for multi-controller support';
 COMMENT ON COLUMN applications_dim.metadata IS 'Additional application data from AppDynamics: tier_count, node_count, description, etc.';
 
 -- Application-Server Mapping

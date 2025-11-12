@@ -524,7 +524,7 @@
         {
           "datasource": "PepsiCo AppDynamics Licensing",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(a.appd_application_name, 'Unknown') as application,\n  COALESCE(SUM(c.usd_amount), 0) as amount\nFROM chargeback_fact c\nLEFT JOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_application_name\nORDER BY amount DESC\nLIMIT 20",
+          "rawSql": "SELECT \n  COALESCE(a.appd_controller, 'Unknown') as controller,\n  COALESCE(a.appd_application_name, 'Unknown') as application,\n  COALESCE(SUM(c.usd_amount), 0) as amount\nFROM chargeback_fact c\nLEFT JOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_controller, a.appd_application_name\nORDER BY amount DESC\nLIMIT 20",
           "refId": "A"
         }
       ],

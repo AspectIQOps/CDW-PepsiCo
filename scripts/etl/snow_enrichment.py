@@ -197,9 +197,9 @@ def enrich_applications(conn):
     
     # Query ServiceNow with batched name lookup
     cmdb_records = query_snow_by_names(
-        app_names, 
+        app_names,
         fields=['sys_id', 'name', 'short_description', 'operational_status',
-                'owned_by', 'business_service', 'support_group', 'u_h_code']
+                'owned_by', 'business_service', 'support_group']
     )
     
     print(f"  ✅ Retrieved {len(cmdb_records)} CMDB records")
@@ -222,19 +222,18 @@ def enrich_applications(conn):
         if cmdb_record:
             sys_id = extract_sys_id(cmdb_record.get('sys_id'))
             sn_name = safe_truncate(extract_sys_id(cmdb_record.get('name')), 255)
-            h_code = safe_truncate(extract_sys_id(cmdb_record.get('u_h_code')), 100)
             support_group = safe_truncate(extract_sys_id(cmdb_record.get('support_group')), 255)
-            
+
             # Update the AppD record with ServiceNow enrichment
+            # Note: h_code is now sourced from AppDynamics tags, not CMDB
             cursor.execute("""
                 UPDATE applications_dim
                 SET sn_sys_id = %s,
                     sn_service_name = %s,
-                    h_code = %s,
                     support_group = %s,
                     updated_at = NOW()
                 WHERE app_id = %s
-            """, (sys_id, sn_name, h_code, support_group, app_id))
+            """, (sys_id, sn_name, support_group, app_id))
             
             enriched_count += 1
             

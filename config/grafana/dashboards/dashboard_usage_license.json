@@ -550,7 +550,7 @@
         {
           "datasource": "PepsiCo AppDynamics Licensing",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  c.capability_code as \"License Type\",\n  lu.tier as \"Tier\",\n  COALESCE(SUM(lu.units_consumed), 0) as \"Total Units\",\n  COALESCE(AVG(lu.units_consumed), 0) as \"Avg Daily\",\n  COALESCE(MAX(lu.units_consumed), 0) as \"Peak\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_application_name, c.capability_code, lu.tier\nORDER BY \"Total Units\" DESC",
+          "rawSql": "SELECT \n  a.appd_controller,\n  a.appd_application_name as \"Application\",\n  c.capability_code as \"License Type\",\n  lu.tier as \"Tier\",\n  COALESCE(SUM(lu.units_consumed), 0) as \"Total Units\",\n  COALESCE(AVG(lu.units_consumed), 0) as \"Avg Daily\",\n  COALESCE(MAX(lu.units_consumed), 0) as \"Peak\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lu.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nGROUP BY a.appd_controller, a.appd_application_name, c.capability_code, lu.tier\nORDER BY \"Total Units\" DESC",
           "refId": "A"
         }
       ],
