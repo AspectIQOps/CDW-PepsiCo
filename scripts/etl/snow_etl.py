@@ -2,6 +2,10 @@
 """
 ServiceNow ETL - Production-Grade with Intelligent Load Strategy
 Auto-detects first run vs incremental and optimizes accordingly
+
+STRATEGY:
+- First Run: Load apps only, skip servers (fast)
+- Second Run: Load optimized servers for AppD apps only (after reconciliation)
 """
 import requests
 import psycopg2
@@ -29,7 +33,6 @@ SN_USER = os.getenv('SN_USER')
 SN_PASS = os.getenv('SN_PASS')
 
 # Safety limits
-MAX_SERVERS_INITIAL_LOAD = 10000  # Prevent timeout on first run
 BATCH_SIZE_APPS = 500
 BATCH_SIZE_SERVERS = 250
 REQUEST_TIMEOUT = 60
@@ -200,8 +203,8 @@ def determine_load_strategy(conn):
     Intelligently determine which load strategy to use
     
     Returns:
-        'INITIAL_FULL': First run or incomplete data - load with filters
-        'INCREMENTAL_OPTIMIZED': Normal operation - only AppD-related servers
+        'FIRST_RUN_APPS_ONLY': Load apps, skip servers (first run)
+        'INCREMENTAL_OPTIMIZED': Load apps + optimized servers (has AppD data)
     """
     cursor = conn.cursor()
     
@@ -213,10 +216,6 @@ def determine_load_strategy(conn):
         """)
         appd_count = cursor.fetchone()[0]
         
-        # Check total applications
-        cursor.execute("SELECT COUNT(*) FROM applications_dim")
-        total_count = cursor.fetchone()[0]
-        
         # Check for matched applications (reconciliation completed)
         cursor.execute("""
             SELECT COUNT(*) FROM applications_dim 
@@ -225,31 +224,31 @@ def determine_load_strategy(conn):
         """)
         matched_count = cursor.fetchone()[0]
         
+        # Check if any servers exist
+        cursor.execute("SELECT COUNT(*) FROM servers_dim")
+        server_count = cursor.fetchone()[0]
+        
         cursor.close()
         
         # Decision logic
-        if total_count == 0:
-            return 'INITIAL_FULL', f"Empty database - first run"
-        elif appd_count == 0:
-            return 'INITIAL_FULL', f"No AppDynamics data yet ({total_count} SN apps exist)"
-        elif matched_count == 0:
-            return 'INITIAL_FULL', f"No matched apps yet (reconciliation not run)"
-        elif matched_count < 50:
-            return 'INITIAL_FULL', f"Only {matched_count} matched apps - incomplete data"
-        else:
+        if matched_count >= 50:
+            return 'INCREMENTAL_OPTIMIZED', f"{matched_count} matched apps found - loading optimized servers"
+        elif appd_count > 0 and matched_count > 0:
             return 'INCREMENTAL_OPTIMIZED', f"{matched_count} matched apps - using optimized mode"
+        else:
+            return 'FIRST_RUN_APPS_ONLY', f"First run or no AppD data yet - apps only (no servers)"
     
     except Exception as e:
         print(f"  ⚠️  Error detecting strategy: {e}")
-        return 'INITIAL_FULL', "Error checking database - defaulting to initial load"
+        return 'FIRST_RUN_APPS_ONLY', "Error checking database - defaulting to apps only"
 
 # ========================================
-# Initial Load Strategy
+# Application Loading (Common to Both Modes)
 # ========================================
 
-def load_applications_full(conn):
-    """Load all ServiceNow applications (needed for enrichment data)"""
-    print("\n[1/3] Loading ServiceNow Applications (All)")
+def load_applications(conn):
+    """Load all ServiceNow applications"""
+    print("\n[Step 1/3] Loading ServiceNow Applications")
     print("-" * 70)
     
     # Query for operational applications
@@ -294,79 +293,8 @@ def load_applications_full(conn):
     cursor.close()
     return len(records)
 
-def load_servers_filtered_initial(conn):
-    """
-    Load servers with smart filtering for initial run
-    Strategy: Only operational, recently updated servers
-    """
-    print("\n[2/3] Loading Servers (Filtered Initial Load)")
-    print("-" * 70)
-    print(f"  Strategy: Operational servers updated in last 90 days")
-    print(f"  Safety limit: {MAX_SERVERS_INITIAL_LOAD:,} servers max")
-    
-    # Calculate date 90 days ago
-    date_90_days_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
-    
-    # Query for operational, recently updated servers
-    query = f"operational_status=1^sys_updated_on>={date_90_days_ago}"
-    
-    servers = query_snow_paginated(
-        table='cmdb_ci_server',
-        fields=['sys_id', 'name', 'os', 'ip_address', 'virtual'],
-        query=query,
-        limit=250,
-        max_records=MAX_SERVERS_INITIAL_LOAD
-    )
-    
-    if not servers:
-        print("  ⚠️  No servers found")
-        return 0
-    
-    print(f"  ✓ Retrieved {len(servers):,} servers")
-    
-    # Batch upsert
-    cursor = conn.cursor()
-    success = 0
-    
-    for server in servers:
-        try:
-            sys_id = extract_sys_id(server.get('sys_id'))
-            name = safe_truncate(extract_sys_id(server.get('name')), 255, "server name")
-            os_type = safe_truncate(extract_sys_id(server.get('os')), 255, "OS")
-            ip_address = safe_truncate(extract_sys_id(server.get('ip_address')), 100, "IP")
-            
-            virtual_raw = extract_sys_id(server.get('virtual'))
-            is_virtual = virtual_raw in ['true', 'True', '1', 'yes', True]
-            
-            if sys_id and name:
-                cursor.execute("""
-                    INSERT INTO servers_dim (sn_sys_id, server_name, os, ip_address, is_virtual)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (sn_sys_id) DO UPDATE SET
-                        server_name = EXCLUDED.server_name,
-                        os = EXCLUDED.os,
-                        ip_address = EXCLUDED.ip_address,
-                        is_virtual = EXCLUDED.is_virtual,
-                        updated_at = CURRENT_TIMESTAMP
-                """, (sys_id, name, os_type, ip_address, is_virtual))
-                success += 1
-                
-                if success % 500 == 0:
-                    conn.commit()
-                    print(f"    Committed {success:,} servers...")
-        
-        except Exception as e:
-            print(f"    ⚠️  Error upserting server: {str(e)[:100]}")
-            conn.rollback()
-    
-    conn.commit()
-    cursor.close()
-    
-    print(f"  ✓ Upserted {success:,} servers")
-    return success
-
 # ========================================
-# Incremental/Optimized Load Strategy
+# Optimized Server Loading (Only When AppD Apps Exist)
 # ========================================
 
 def load_servers_optimized(conn):
@@ -374,7 +302,7 @@ def load_servers_optimized(conn):
     Load ONLY servers for AppDynamics-monitored applications
     This is the production optimization strategy
     """
-    print("\n[2/3] Loading Servers (Optimized for AppD Apps)")
+    print("\n[Step 2/3] Loading Servers (Optimized for AppD Apps)")
     print("-" * 70)
     
     cursor = conn.cursor()
@@ -391,16 +319,17 @@ def load_servers_optimized(conn):
     
     if not results:
         print("  ⚠️  No matched AppD applications found")
-        print("     Run reconciliation first, or use initial load mode")
+        print("     This shouldn't happen in optimized mode")
+        print("     Run reconciliation_engine.py first")
         cursor.close()
         return 0
     
     app_sys_ids = [row[0] for row in results]
     print(f"  ✓ Found {len(app_sys_ids)} AppD-monitored applications")
-    print(f"    (Only fetching servers for these apps, not all {len(app_sys_ids):,})")
+    print(f"    (Only fetching servers for these apps, not all CMDB apps)")
     
     # Fetch relationships for AppD apps only
-    print(f"\n  Step 1: Fetching app-to-server relationships...")
+    print(f"\n  Fetching app-to-server relationships...")
     all_relationships = []
     batch_size = 100
     
@@ -437,7 +366,7 @@ def load_servers_optimized(conn):
     print(f"  ✓ Identified {len(server_sys_ids):,} unique servers")
     
     # Fetch only these servers
-    print(f"\n  Step 2: Fetching {len(server_sys_ids):,} servers...")
+    print(f"\n  Fetching {len(server_sys_ids):,} servers...")
     success = 0
     server_list = list(server_sys_ids)
     batch_size = 50
@@ -491,12 +420,12 @@ def load_servers_optimized(conn):
     return success
 
 # ========================================
-# Relationships (Common to Both Strategies)
+# Relationships (Common to Both Modes)
 # ========================================
 
 def load_relationships(conn):
     """Load app-to-server relationship mappings"""
-    print("\n[3/3] Loading Application-Server Relationships")
+    print("\n[Step 3/3] Loading Application-Server Relationships")
     print("-" * 70)
     
     cursor = conn.cursor()
@@ -628,18 +557,29 @@ def main():
         print(f"  Strategy: {strategy}")
         print(f"  Reason: {reason}")
         
-        # Execute appropriate strategy
-        if strategy == 'INITIAL_FULL':
-            print(f"\n🆕 INITIAL LOAD MODE")
-            print("=" * 70)
-            apps_loaded = load_applications_full(conn)
-            servers_loaded = load_servers_filtered_initial(conn)
-            relationships_loaded = load_relationships(conn)
+        # Load applications (always)
+        apps_loaded = load_applications(conn)
+        
+        # Load servers based on strategy
+        if strategy == 'FIRST_RUN_APPS_ONLY':
+            print("\n[Step 2/3] Loading Servers")
+            print("-" * 70)
+            print("  ⊘ SKIPPED - First run detected")
+            print("  ")
+            print("  ℹ️  To load servers optimized for AppD apps:")
+            print("     1. Let this pipeline complete")
+            print("     2. Run appd_etl.py to load AppDynamics data")
+            print("     3. Run reconciliation_engine.py to match apps")
+            print("     4. Run this ServiceNow ETL again")
+            print("  ")
+            print("  This approach prevents timeout by only loading")
+            print("  servers for the ~128 apps you actually monitor")
+            servers_loaded = 0
+            relationships_loaded = 0
         
         else:  # INCREMENTAL_OPTIMIZED
             print(f"\n🔄 OPTIMIZED MODE (AppD Apps Only)")
             print("=" * 70)
-            apps_loaded = load_applications_full(conn)  # Still load all apps for enrichment
             servers_loaded = load_servers_optimized(conn)
             relationships_loaded = load_relationships(conn)
         
@@ -664,6 +604,12 @@ def main():
         print(f"  Servers: {servers_loaded:,}")
         print(f"  Relationships: {relationships_loaded:,}")
         print(f"  Strategy: {strategy}")
+        
+        if strategy == 'FIRST_RUN_APPS_ONLY':
+            print("\n  📋 Next Steps:")
+            print("     1. Continue pipeline (AppD ETL → Reconciliation)")
+            print("     2. Run pipeline again to load optimized servers")
+        
         print("=" * 70)
         
     except Exception as e:
