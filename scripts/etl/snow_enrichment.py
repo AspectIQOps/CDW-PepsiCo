@@ -469,7 +469,7 @@ def load_relationships(conn):
             VALUES %s
             ON CONFLICT (app_id, server_id) DO UPDATE SET
                 relationship_type = EXCLUDED.relationship_type,
-                created_at = CURRENT_TIMESTAMP
+                discovered_at = CURRENT_TIMESTAMP
         """
         execute_values(cursor, insert_query, records)
         conn.commit()
