@@ -84,7 +84,7 @@ def get_oauth_token(controller, account, client_id, client_secret):
         print(f"❌ OAuth token request failed for {controller}: {e}")
         raise
 
-def appd_api_get(controller, account, client_id, client_secret, endpoint, params=None):
+def appd_api_get(controller, account, client_id, client_secret, endpoint, params=None, suppress_404=False):
     """
     Make authenticated GET request to AppDynamics API
     Handles OAuth token management automatically
@@ -101,6 +101,13 @@ def appd_api_get(controller, account, client_id, client_secret, endpoint, params
         response = requests.get(url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        # Suppress 404 errors if requested (for optional endpoints like tags)
+        if suppress_404 and e.response.status_code == 404:
+            raise
+        print(f"❌ API request failed: {url}")
+        print(f"   Error: {e}")
+        raise
     except Exception as e:
         print(f"❌ API request failed: {url}")
         print(f"   Error: {e}")
@@ -168,9 +175,10 @@ def fetch_application_tags(controller, account, client_id, client_secret, app_id
     Returns dict of tag_name -> tag_value
     """
     try:
-        # AppDynamics tags API endpoint
+        # AppDynamics tags API endpoint (suppress 404 errors for cleaner logs)
         tags = appd_api_get(controller, account, client_id, client_secret,
-                           f"restui/applicationManagerUiBean/getApplicationById/{app_id}")
+                           f"restui/applicationManagerUiBean/getApplicationById/{app_id}",
+                           suppress_404=True)
 
         if isinstance(tags, dict):
             # Extract tags from response - tags are usually in 'tags' array
@@ -182,7 +190,7 @@ def fetch_application_tags(controller, account, client_id, client_secret, app_id
         return {}
 
     except Exception as e:
-        # Tags may not be available for all apps, so just return empty dict
+        # Tags may not be available for all apps (404s are expected), just return empty dict
         return {}
 
 def fetch_all_nodes_batch(controller, account, client_id, client_secret, app_ids):
