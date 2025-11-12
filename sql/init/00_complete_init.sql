@@ -139,8 +139,8 @@ CREATE TABLE IF NOT EXISTS servers_dim (
     server_id SERIAL PRIMARY KEY,
     sn_sys_id VARCHAR(50) UNIQUE NOT NULL,
     server_name VARCHAR(255),
-    ip_address VARCHAR(50),
-    os VARCHAR(100),
+    ip_address VARCHAR(100),
+    os VARCHAR(255),
     is_virtual BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
