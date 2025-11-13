@@ -117,7 +117,7 @@ cd CDW-PepsiCo
 ├── appdynamics/
 │   ├── CONTROLLER
 │   ├── ACCOUNT
-│   ├── CLIENT_ID
+│   ├── CLIENT_NAME
 │   └── CLIENT_SECRET
 ├── servicenow/
 │   ├── INSTANCE

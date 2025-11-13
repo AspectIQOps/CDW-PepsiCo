@@ -127,7 +127,7 @@ def validate_credentials():
 
     # AppDynamics credentials (REQUIRED for this architecture)
     appd_complete = (os.getenv('APPD_CONTROLLER') and os.getenv('APPD_ACCOUNT')
-                     and os.getenv('APPD_CLIENT_ID') and os.getenv('APPD_CLIENT_SECRET'))
+                     and os.getenv('APPD_CLIENT_NAME') and os.getenv('APPD_CLIENT_SECRET'))
 
     if appd_complete:
         has_appdynamics = True

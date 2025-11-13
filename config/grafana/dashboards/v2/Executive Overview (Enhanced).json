@@ -1,0 +1,688 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "Executive Summary",
+      "type": "row"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 100000
+              },
+              {
+                "color": "red",
+                "value": 250000
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name",
+        "showPercentChange": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(usd_amount), 0) as \"Monthly Spend\"\nFROM chargeback_fact\nWHERE month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ($controller = 'All' OR EXISTS (\n    SELECT 1 FROM applications_dim a \n    WHERE a.app_id = chargeback_fact.app_id \n    AND a.appd_controller = $controller\n  ))",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Monthly Spend",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 100
+              },
+              {
+                "color": "#EAB839",
+                "value": 300
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COUNT(*) as \"Applications\"\nFROM applications_dim\nWHERE appd_application_name IS NOT NULL\n  AND ($controller = 'All' OR appd_controller = $controller)",
+          "refId": "A"
+        }
+      ],
+      "title": "Applications Monitored",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(\n    (COUNT(*) FILTER (WHERE match_status = 'auto_matched')::float / \n     NULLIF(COUNT(*)::float, 0)) * 100,\n    0\n  ) as \"Match Rate\"\nFROM (\n  SELECT DISTINCT appd_application_id, match_status\n  FROM app_cross_reference_v\n  WHERE appd_application_id IS NOT NULL\n    AND ($controller = 'All' OR appd_controller = $controller)\n) sub",
+          "refId": "A"
+        }
+      ],
+      "title": "CMDB Match Rate",
+      "type": "gauge"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": -100,
+                "to": -10,
+                "result": {
+                  "color": "green",
+                  "text": "Decreasing ↓"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": -10,
+                "to": 10,
+                "result": {
+                  "color": "yellow",
+                  "text": "Stable →"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 10,
+                "to": 100,
+                "result": {
+                  "color": "red",
+                  "text": "Increasing ↑"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "WITH monthly_totals AS (\n  SELECT \n    date_trunc('month', month_start) as month,\n    SUM(usd_amount) as total\n  FROM chargeback_fact cf\n  WHERE month_start >= date_trunc('month', $__timeFrom()::timestamptz) - interval '1 month'\n    AND month_start <= date_trunc('month', $__timeTo()::timestamptz)\n    AND ($controller = 'All' OR EXISTS (\n      SELECT 1 FROM applications_dim a \n      WHERE a.app_id = cf.app_id AND a.appd_controller = $controller\n    ))\n  GROUP BY 1\n  ORDER BY 1 DESC\n  LIMIT 2\n)\nSELECT \n  CASE \n    WHEN LAG(total) OVER (ORDER BY month DESC) = 0 THEN 0\n    ELSE ((total - LAG(total) OVER (ORDER BY month DESC)) / \n          NULLIF(LAG(total) OVER (ORDER BY month DESC), 0)) * 100\n  END as \"MoM Change\"\nFROM monthly_totals\nLIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Trend (MoM)",
+      "type": "stat"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 101,
+      "title": "Cost Analysis",
+      "type": "row"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
+            "pointSize": 6,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "sum",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "time_series",
+          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  'Daily Cost' as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\n  AND ($controller = 'All' OR a.appd_controller = $controller)\nGROUP BY DATE(lc.ts)\nORDER BY DATE(lc.ts)",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily Cost Trend (90 Days)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(s.sector_name, 'Unknown') as sector,\n  COALESCE(SUM(c.usd_amount), 0) as total\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ($controller = 'All' OR a.appd_controller = $controller)\nGROUP BY s.sector_name\nHAVING SUM(c.usd_amount) > 0\nORDER BY total DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Distribution by Sector",
+      "type": "piechart"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 102,
+      "title": "Top Applications",
+      "type": "row"
+    },
+    {
+      "datasource": "PepsiCo AppDynamics Licensing",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Units"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlPu"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trend"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "sparkline"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Application"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View Details",
+                    "url": "/d/pepsico-cost-analytics?var-app=${__data.fields.Application}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Cost"
+          }
+        ]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": "PepsiCo AppDynamics Licensing",
+          "format": "table",
+          "rawSql": "WITH daily_costs AS (\n  SELECT \n    a.appd_controller as \"Controller\",\n    a.appd_application_name as \"Application\",\n    COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n    COALESCE(o.owner_name, 'Unknown') as \"Owner\",\n    COALESCE(ar.pattern_name, 'Unknown') as \"Architecture\",\n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost,\n    SUM(lu.units_consumed) as daily_units\n  FROM applications_dim a\n  LEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\n  LEFT JOIN owners_dim o ON a.owner_id = o.owner_id\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  LEFT JOIN license_cost_fact lc ON a.app_id = lc.app_id\n    AND lc.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n    AND lc.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  LEFT JOIN license_usage_fact lu ON a.app_id = lu.app_id\n    AND DATE(lu.ts) = DATE(lc.ts)\n  WHERE a.appd_application_name IS NOT NULL\n    AND ($controller = 'All' OR a.appd_controller = $controller)\n  GROUP BY a.appd_controller, a.appd_application_name, s.sector_name, o.owner_name, ar.pattern_name, DATE(lc.ts)\n)\nSELECT \n  \"Controller\",\n  \"Application\",\n  \"Sector\",\n  \"Owner\",\n  \"Architecture\",\n  COALESCE(SUM(daily_cost), 0) as \"Cost\",\n  COALESCE(SUM(daily_units), 0) as \"Units\"\nFROM daily_costs\nGROUP BY \"Controller\", \"Application\", \"Sector\", \"Owner\", \"Architecture\"\nORDER BY \"Cost\" DESC\nLIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Applications by Cost (Current Month)",
+      "type": "table"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "pepsico",
+    "appdynamics",
+    "executive"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": "PepsiCo AppDynamics Licensing",
+        "definition": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Controller",
+        "multi": false,
+        "name": "controller",
+        "options": [],
+        "query": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PepsiCo AppDynamics - Executive Overview (Enhanced)",
+  "uid": "pepsico-executive-overview-enhanced",
+  "version": 0,
+  "weekStart": ""
+}

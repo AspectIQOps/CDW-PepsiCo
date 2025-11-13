@@ -25,7 +25,7 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 # Multi-controller support: comma-separated lists
 APPD_CONTROLLERS = os.getenv('APPD_CONTROLLERS', os.getenv('APPD_CONTROLLER', ''))
 APPD_ACCOUNTS = os.getenv('APPD_ACCOUNTS', os.getenv('APPD_ACCOUNT', ''))
-APPD_CLIENT_IDS = os.getenv('APPD_CLIENT_IDS', os.getenv('APPD_CLIENT_ID', ''))
+APPD_CLIENT_IDS = os.getenv('APPD_CLIENT_IDS', os.getenv('APPD_CLIENT_NAME', ''))
 APPD_CLIENT_SECRETS = os.getenv('APPD_CLIENT_SECRETS', os.getenv('APPD_CLIENT_SECRET', ''))
 
 # OAuth token cache per controller
