@@ -31,7 +31,7 @@
       },
       "id": 100,
       "panels": [],
-      "title": "Executive Summary",
+      "title": "Tier Cost Summary",
       "type": "row"
     },
     {
@@ -46,7 +46,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
               },
               {
@@ -54,7 +54,7 @@
                 "value": 100000
               },
               {
-                "color": "red",
+                "color": "orange",
                 "value": 250000
               }
             ]
@@ -84,7 +84,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -92,11 +92,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(usd_amount), 0) as \"Monthly Spend\"\nFROM chargeback_fact\nWHERE month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ('$controller' = 'All' OR EXISTS (\n    SELECT 1 FROM applications_dim a \n    WHERE a.app_id = chargeback_fact.app_id \n    AND a.appd_controller = '$controller'\n  ))",
+          "rawSql": "SELECT \n  COALESCE(SUM(usd_cost), 0) as \"Peak Tier Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE UPPER(COALESCE(lc.tier, '')) = 'PEAK'\n  AND lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "Total Monthly Spend",
+      "title": "Peak Tier Cost (90 Days)",
       "type": "stat"
     },
     {
@@ -111,12 +111,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 100000
               }
             ]
           },
-          "unit": "short"
+          "unit": "currencyUSD"
         },
         "overrides": []
       },
@@ -141,7 +145,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -149,11 +153,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COUNT(*) as \"Applications\"\nFROM applications_dim\nWHERE appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(usd_cost), 0) as \"Pro Tier Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE UPPER(COALESCE(lc.tier, '')) = 'PRO'\n  AND lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "Applications Monitored",
+      "title": "Pro Tier Cost (90 Days)",
       "type": "stat"
     },
     {
@@ -164,26 +168,24 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "blue",
                 "value": 0
               },
               {
-                "color": "orange",
-                "value": 80
+                "color": "green",
+                "value": 10000
               },
               {
-                "color": "green",
-                "value": 95
+                "color": "light-green",
+                "value": 50000
               }
             ]
           },
-          "unit": "percent"
+          "unit": "currencyUSD"
         },
         "overrides": []
       },
@@ -195,9 +197,11 @@
       },
       "id": 3,
       "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -205,21 +209,21 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  CASE \n    WHEN COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL) = 0 THEN 0\n    ELSE (COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL)::float / \n          COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL)::float) * 100\n  END as \"Match Rate\"\nFROM applications_dim",
+          "rawSql": "SELECT \n  COALESCE(SUM(usd_cost) * 0.33, 0) as \"Potential Savings\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE UPPER(COALESCE(lc.tier, '')) = 'PEAK'\n  AND lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "CMDB Match Rate",
-      "type": "gauge"
+      "title": "Potential Savings (33%)",
+      "type": "stat"
     },
     {
       "datasource": "Pepsico Cost Analytics",
@@ -231,15 +235,11 @@
           "decimals": 1,
           "mappings": [],
           "thresholds": {
-            "mode": "percentage",
+            "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "purple",
                 "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 10
               }
             ]
           },
@@ -256,7 +256,7 @@
       "id": 4,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
@@ -268,7 +268,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -276,11 +276,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH daily_totals AS (\n  SELECT \n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  WHERE lc.ts >= NOW() - INTERVAL '60 days'\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY DATE(lc.ts)\n  ORDER BY day DESC\n  LIMIT 30\n),\nperiods AS (\n  SELECT \n    AVG(CASE WHEN day >= NOW() - INTERVAL '30 days' THEN daily_cost END) as recent_avg,\n    AVG(CASE WHEN day < NOW() - INTERVAL '30 days' THEN daily_cost END) as previous_avg\n  FROM daily_totals\n)\nSELECT \n  CASE \n    WHEN previous_avg IS NULL OR previous_avg = 0 THEN 0\n    ELSE ((recent_avg - previous_avg) / NULLIF(previous_avg, 0)) * 100\n  END as \"Cost Trend\"\nFROM periods",
+          "rawSql": "WITH tier_costs AS (\n  SELECT \n    SUM(CASE WHEN UPPER(COALESCE(lc.tier, '')) = 'PEAK' THEN lc.usd_cost ELSE 0 END) as peak_cost,\n    SUM(lc.usd_cost) as total_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  WHERE lc.ts >= NOW() - INTERVAL '90 days'\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n)\nSELECT \n  CASE WHEN total_cost = 0 THEN 0\n  ELSE (peak_cost / NULLIF(total_cost, 0)) * 100 END as \"Peak %\"\nFROM tier_costs",
           "refId": "A"
         }
       ],
-      "title": "Cost Trend (MoM)",
+      "title": "Peak Tier Percentage",
       "type": "stat"
     },
     {
@@ -293,7 +293,7 @@
       },
       "id": 101,
       "panels": [],
-      "title": "Cost Analysis",
+      "title": "Cost Trends & Distribution",
       "type": "row"
     },
     {
@@ -322,7 +322,7 @@
             "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 3,
-            "pointSize": 6,
+            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -331,7 +331,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -349,7 +349,38 @@
           },
           "unit": "currencyUSD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PEAK"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PRO"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 10,
@@ -381,11 +412,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  'Daily Cost' as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lc.ts)\nORDER BY DATE(lc.ts)",
+          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  UPPER(COALESCE(lc.tier, 'UNKNOWN')) as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lc.ts), UPPER(COALESCE(lc.tier, 'UNKNOWN'))\nORDER BY DATE(lc.ts), UPPER(COALESCE(lc.tier, 'UNKNOWN'))",
           "refId": "A"
         }
       ],
-      "title": "Daily Cost Trend (90 Days)",
+      "title": "Peak vs Pro Cost Trend (90 Days)",
       "type": "timeseries"
     },
     {
@@ -402,7 +433,6 @@
               "viz": false
             }
           },
-          "fieldMinMax": false,
           "mappings": [],
           "unit": "currencyUSD"
         },
@@ -422,7 +452,7 @@
         ],
         "legend": {
           "displayMode": "table",
-          "placement": "bottom",
+          "placement": "right",
           "showLegend": true,
           "values": [
             "value",
@@ -434,7 +464,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/.*/",
+          "fields": "",
           "values": false
         },
         "sort": "desc",
@@ -449,11 +479,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(s.sector_name, 'Unknown') as sector,\n  COALESCE(SUM(c.usd_amount), 0) as total\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY s.sector_name\nHAVING SUM(c.usd_amount) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  UPPER(COALESCE(lc.tier, 'UNKNOWN')) as tier,\n  COALESCE(SUM(lc.usd_cost), 0) as total\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY UPPER(COALESCE(lc.tier, 'UNKNOWN'))\nHAVING SUM(lc.usd_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],
-      "title": "Cost Distribution by Sector",
+      "title": "Cost Distribution by Tier",
       "type": "piechart"
     },
     {
@@ -466,7 +496,7 @@
       },
       "id": 102,
       "panels": [],
-      "title": "Top Applications by Cost",
+      "title": "Top Applications by Peak Tier Cost",
       "type": "row"
     },
     {
@@ -512,7 +542,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
+        "h": 10,
         "w": 24,
         "x": 0,
         "y": 18
@@ -527,7 +557,7 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "orientation": "horizontal",
         "showValue": "always",
@@ -544,12 +574,31 @@
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Total Cost\"\nFROM applications_dim a\nLEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\nLEFT JOIN license_cost_fact lc ON a.app_id = lc.app_id\n  AND lc.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lc.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nWHERE a.appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name, s.sector_name\nHAVING SUM(lc.usd_cost) > 0\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
-          "refId": "A"
+          "rawQuery": true,
+          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Peak Cost\",\n  COALESCE(SUM(lc.usd_cost) * 0.33, 0) as \"Potential Savings\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nLEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\nWHERE UPPER(COALESCE(lc.tier, '')) = 'PEAK'\n  AND lc.ts >= NOW() - INTERVAL '90 days'\n  AND a.appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name, s.sector_name\nHAVING SUM(lc.usd_cost) > 0\nORDER BY \"Peak Cost\" DESC\nLIMIT 10",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
         }
       ],
-      "title": "Top 10 Applications by Cost (Last 30 Days)",
+      "title": "Top 10 Applications by Peak Tier Cost",
       "type": "barchart"
     }
   ],
@@ -559,7 +608,9 @@
   "tags": [
     "pepsico",
     "appdynamics",
-    "executive"
+    "peak",
+    "pro",
+    "optimization"
   ],
   "templating": {
     "list": [
@@ -587,7 +638,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "PepsiCo AppDynamics - Executive Overview (Enhanced)",
-  "uid": "pepsico-executive-overview-enhanced",
-  "version": 0
+  "title": "PepsiCo AppDynamics - Peak vs Pro Analysis (Enhanced)",
+  "uid": "pepsico-peak-pro-fixed",
+  "version": 2
 }

@@ -31,73 +31,8 @@
       },
       "id": 100,
       "panels": [],
-      "title": "Executive Summary",
+      "title": "License Type Summary",
       "type": "row"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "#EAB839",
-                "value": 100000
-              },
-              {
-                "color": "red",
-                "value": 250000
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 1
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(usd_amount), 0) as \"Monthly Spend\"\nFROM chargeback_fact\nWHERE month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ('$controller' = 'All' OR EXISTS (\n    SELECT 1 FROM applications_dim a \n    WHERE a.app_id = chargeback_fact.app_id \n    AND a.appd_controller = '$controller'\n  ))",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Monthly Spend",
-      "type": "stat"
     },
     {
       "datasource": "Pepsico Cost Analytics",
@@ -123,12 +58,12 @@
       "gridPos": {
         "h": 5,
         "w": 6,
-        "x": 6,
+        "x": 0,
         "y": 1
       },
-      "id": 2,
+      "id": 1,
       "options": {
-        "colorMode": "background",
+        "colorMode": "background_solid",
         "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
@@ -141,7 +76,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -149,11 +84,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COUNT(*) as \"Applications\"\nFROM applications_dim\nWHERE appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"APM Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'APM'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "Applications Monitored",
+      "title": "APM Total Units",
       "type": "stat"
     },
     {
@@ -164,26 +99,73 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 100,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "purple",
                 "value": 0
-              },
-              {
-                "color": "orange",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 95
               }
             ]
           },
-          "unit": "percent"
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"MRUM Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'MRUM'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "MRUM Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
         },
         "overrides": []
       },
@@ -195,67 +177,7 @@
       },
       "id": 3,
       "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  CASE \n    WHEN COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL) = 0 THEN 0\n    ELSE (COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL)::float / \n          COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL)::float) * 100\n  END as \"Match Rate\"\nFROM applications_dim",
-          "refId": "A"
-        }
-      ],
-      "title": "CMDB Match Rate",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
-        "y": 1
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "background",
+        "colorMode": "background_solid",
         "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
@@ -268,7 +190,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value",
+        "textMode": "value_and_name",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -276,11 +198,68 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH daily_totals AS (\n  SELECT \n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  WHERE lc.ts >= NOW() - INTERVAL '60 days'\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY DATE(lc.ts)\n  ORDER BY day DESC\n  LIMIT 30\n),\nperiods AS (\n  SELECT \n    AVG(CASE WHEN day >= NOW() - INTERVAL '30 days' THEN daily_cost END) as recent_avg,\n    AVG(CASE WHEN day < NOW() - INTERVAL '30 days' THEN daily_cost END) as previous_avg\n  FROM daily_totals\n)\nSELECT \n  CASE \n    WHEN previous_avg IS NULL OR previous_avg = 0 THEN 0\n    ELSE ((recent_avg - previous_avg) / NULLIF(previous_avg, 0)) * 100\n  END as \"Cost Trend\"\nFROM periods",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Synthetic Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'Synthetic'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "Cost Trend (MoM)",
+      "title": "Synthetic Total Units (0 in test data)",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"DB Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'DB'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "DB Total Units (0 in test data)",
       "type": "stat"
     },
     {
@@ -293,7 +272,7 @@
       },
       "id": 101,
       "panels": [],
-      "title": "Cost Analysis",
+      "title": "Usage Trends & Distribution",
       "type": "row"
     },
     {
@@ -312,7 +291,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 25,
+            "fillOpacity": 20,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -322,7 +301,7 @@
             "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 3,
-            "pointSize": 6,
+            "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -347,13 +326,13 @@
               }
             ]
           },
-          "unit": "currencyUSD"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 10,
-        "w": 16,
+        "w": 24,
         "x": 0,
         "y": 7
       },
@@ -363,8 +342,7 @@
           "calcs": [
             "mean",
             "max",
-            "sum",
-            "lastNotNull"
+            "sum"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -381,80 +359,12 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  'Daily Cost' as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lc.ts)\nORDER BY DATE(lc.ts)",
+          "rawSql": "SELECT \n  DATE(lu.ts) as time,\n  c.capability_code as metric,\n  COALESCE(SUM(lu.units_consumed), 0) as value\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lu.ts), c.capability_code\nORDER BY DATE(lu.ts), c.capability_code",
           "refId": "A"
         }
       ],
-      "title": "Daily Cost Trend (90 Days)",
+      "title": "Usage Trend by License Type (90 Days)",
       "type": "timeseries"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "fieldMinMax": false,
-          "mappings": [],
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 8,
-        "x": 16,
-        "y": 7
-      },
-      "id": 6,
-      "options": {
-        "displayLabels": [
-          "name",
-          "percent"
-        ],
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "/.*/",
-          "values": false
-        },
-        "sort": "desc",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  COALESCE(s.sector_name, 'Unknown') as sector,\n  COALESCE(SUM(c.usd_amount), 0) as total\nFROM chargeback_fact c\nLEFT JOIN sectors_dim s ON c.sector_id = s.sector_id\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND c.month_start < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY s.sector_name\nHAVING SUM(c.usd_amount) > 0\nORDER BY total DESC",
-          "refId": "A"
-        }
-      ],
-      "title": "Cost Distribution by Sector",
-      "type": "piechart"
     },
     {
       "collapsed": false,
@@ -466,7 +376,134 @@
       },
       "id": 102,
       "panels": [],
-      "title": "Top Applications by Cost",
+      "title": "Peak vs Pro Breakdown",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Peak Tier Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE UPPER(COALESCE(lu.tier, '')) = 'PEAK'\n  AND lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "Peak Tier Total Units",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Pro Tier Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE UPPER(COALESCE(lu.tier, '')) = 'PRO'\n  AND lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "Pro Tier Total Units",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Top Applications by Usage",
       "type": "row"
     },
     {
@@ -480,6 +517,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisGridShow": true,
             "axisLabel": "",
             "axisPlacement": "auto",
             "fillOpacity": 80,
@@ -507,20 +545,20 @@
               }
             ]
           },
-          "unit": "currencyUSD"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 24
       },
-      "id": 7,
+      "id": 10,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.85,
+        "barWidth": 0.8,
         "fullHighlight": false,
         "groupWidth": 0.7,
         "legend": {
@@ -545,11 +583,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Total Cost\"\nFROM applications_dim a\nLEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\nLEFT JOIN license_cost_fact lc ON a.app_id = lc.app_id\n  AND lc.ts >= date_trunc('month', $__timeFrom()::timestamptz)\n  AND lc.ts < date_trunc('month', $__timeTo()::timestamptz) + interval '1 month'\nWHERE a.appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name, s.sector_name\nHAVING SUM(lc.usd_cost) > 0\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  COALESCE(SUM(lu.units_consumed), 0) as \"Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= NOW() - INTERVAL '90 days'\n  AND a.appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name\nHAVING SUM(lu.units_consumed) > 0\nORDER BY \"Total Units\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
-      "title": "Top 10 Applications by Cost (Last 30 Days)",
+      "title": "Top 10 Applications by Total Usage",
       "type": "barchart"
     }
   ],
@@ -559,7 +597,8 @@
   "tags": [
     "pepsico",
     "appdynamics",
-    "executive"
+    "usage",
+    "license"
   ],
   "templating": {
     "list": [
@@ -568,7 +607,10 @@
           "text": "All",
           "value": "All"
         },
-        "datasource": "Pepsico Cost Analytics",
+        "datasource": {
+          "type": "postgres",
+          "uid": "Pepsico Cost Analytics"
+        },
         "definition": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
         "includeAll": false,
         "label": "Controller",
@@ -587,7 +629,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "PepsiCo AppDynamics - Executive Overview (Enhanced)",
-  "uid": "pepsico-executive-overview-enhanced",
-  "version": 0
+  "title": "PepsiCo AppDynamics - Usage by License Type (Enhanced)",
+  "uid": "pepsico-usage-by-license-enhanced",
+  "version": 2
 }
