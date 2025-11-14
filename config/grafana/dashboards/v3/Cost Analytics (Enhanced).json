@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 0,
+  "id": 106,
   "links": [],
   "panels": [
     {
@@ -71,7 +71,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(usd_cost), 0) as \"Total Cost\"\nFROM license_cost_fact lc\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR EXISTS (\n    SELECT 1 FROM applications_dim a \n    WHERE a.app_id = lc.app_id \n    AND a.appd_controller = '${controller}'\n  ))",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
@@ -128,7 +128,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(AVG(daily_cost), 0) as \"Avg Daily Cost\"\nFROM (\n  SELECT DATE(ts), SUM(usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  WHERE lc.ts >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR EXISTS (\n      SELECT 1 FROM applications_dim a \n      WHERE a.app_id = lc.app_id \n      AND a.appd_controller = '${controller}'\n    ))\n  GROUP BY DATE(ts)\n) sub",
+          "rawSql": "SELECT \n  COALESCE(AVG(daily_total), 0) as \"Avg Daily Cost\"\nFROM (\n  SELECT cost_date, SUM(total_cost) as daily_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR controller = '${controller}')\n  GROUP BY cost_date\n) sub",
           "refId": "A"
         }
       ],
@@ -185,7 +185,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(MAX(daily_cost), 0) as \"Peak Day Cost\"\nFROM (\n  SELECT DATE(ts), SUM(usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  WHERE lc.ts >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR EXISTS (\n      SELECT 1 FROM applications_dim a \n      WHERE a.app_id = lc.app_id \n      AND a.appd_controller = '${controller}'\n    ))\n  GROUP BY DATE(ts)\n) sub",
+          "rawSql": "SELECT \n  COALESCE(MAX(daily_total), 0) as \"Peak Day Cost\"\nFROM (\n  SELECT cost_date, SUM(total_cost) as daily_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR controller = '${controller}')\n  GROUP BY cost_date\n) sub",
           "refId": "A"
         }
       ],
@@ -242,7 +242,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(AVG(app_cost), 0) as \"Avg Cost per App\"\nFROM (\n  SELECT a.app_id, SUM(lc.usd_cost) as app_cost\n  FROM applications_dim a\n  JOIN license_cost_fact lc ON a.app_id = lc.app_id\n  WHERE lc.ts >= NOW() - INTERVAL '90 days'\n    AND a.appd_application_name IS NOT NULL\n    AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\n  GROUP BY a.app_id\n) sub",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) / NULLIF(SUM(app_count), 0), 0) as \"Avg Cost per App\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
@@ -333,7 +333,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  COALESCE(s.sector_name, 'Unknown') as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nLEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\nGROUP BY DATE(lc.ts), s.sector_name\nORDER BY DATE(lc.ts), s.sector_name",
+          "rawSql": "SELECT \n  cost_date as time,\n  sector_name as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
           "refId": "A"
         }
       ],
@@ -416,7 +416,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(s.sector_name, 'Unknown') as \"Sector\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Total Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nLEFT JOIN sectors_dim s ON a.sector_id = s.sector_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\nGROUP BY s.sector_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  sector_name as \"Sector\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY sector_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -499,7 +499,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(o.owner_name, 'Unknown') as \"Owner\",\n  COALESCE(SUM(lc.usd_cost), 0) as \"Total Cost\"\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nLEFT JOIN owners_dim o ON a.owner_id = o.owner_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\nGROUP BY o.owner_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  owner_name as \"Owner\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_owner_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY owner_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -566,7 +566,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  c.capability_code as capability,\n  COALESCE(SUM(lc.usd_cost), 0) as total\nFROM license_cost_fact lc\nJOIN capabilities_dim c ON lc.capability_id = c.capability_id\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\nGROUP BY c.capability_code\nHAVING SUM(lc.usd_cost) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  capability_code as capability,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_usage_by_capability dv\nJOIN (\n  SELECT DISTINCT capability_code, controller, tier, SUM(total_cost) as total_cost\n  FROM (\n    SELECT \n      duv.capability_code,\n      dc.controller,\n      dc.tier,\n      dc.total_cost\n    FROM mv_daily_usage_by_capability duv\n    JOIN mv_daily_cost_by_controller dc \n      ON duv.usage_date = dc.cost_date \n      AND duv.controller = dc.controller \n      AND duv.tier = dc.tier\n    WHERE duv.usage_date >= NOW() - INTERVAL '90 days'\n      AND ('${controller}' = 'All' OR duv.controller = '${controller}')\n  ) sub\n  GROUP BY capability_code, controller, tier\n) cost ON dv.capability_code = cost.capability_code\nWHERE dv.usage_date >= NOW() - INTERVAL '90 days'\nGROUP BY dv.capability_code\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],
@@ -633,7 +633,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  lc.tier as tier,\n  COALESCE(SUM(lc.usd_cost), 0) as total\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR a.appd_controller = '${controller}')\nGROUP BY lc.tier\nHAVING SUM(lc.usd_cost) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],

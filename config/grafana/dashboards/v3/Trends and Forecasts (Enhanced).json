@@ -53,9 +53,9 @@
             "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
@@ -65,6 +65,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -80,7 +81,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -97,16 +98,21 @@
       "id": 1,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -137,9 +143,9 @@
             "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
@@ -149,6 +155,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -164,7 +171,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -181,16 +188,21 @@
       "id": 2,
       "options": {
         "legend": {
-          "calcs": ["mean", "last"],
+          "calcs": [
+            "mean",
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -221,9 +233,9 @@
             "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
@@ -233,6 +245,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -248,7 +261,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -265,16 +278,21 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": ["mean", "last"],
+          "calcs": [
+            "mean",
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -318,14 +336,17 @@
             "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineStyle": {
-              "dash": [10, 10],
+              "dash": [
+                10,
+                10
+              ],
               "fill": "dash"
             },
             "lineWidth": 2,
@@ -334,6 +355,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -349,7 +371,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -385,16 +407,21 @@
       "id": 4,
       "options": {
         "legend": {
-          "calcs": ["mean", "last"],
+          "calcs": [
+            "mean",
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -418,6 +445,9 @@
             "cellOptions": {
               "type": "auto"
             },
+            "footer": {
+              "reducers": []
+            },
             "inspect": false
           },
           "mappings": [],
@@ -426,7 +456,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -497,14 +527,9 @@
       "id": 5,
       "options": {
         "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": ["sum"],
-          "show": false
-        },
         "showHeader": true
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -548,9 +573,9 @@
             "fillOpacity": 20,
             "gradientMode": "opacity",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "smooth",
@@ -574,8 +599,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -599,7 +623,10 @@
               {
                 "id": "custom.lineStyle",
                 "value": {
-                  "dash": [5, 10],
+                  "dash": [
+                    5,
+                    10
+                  ],
                   "fill": "dash"
                 }
               }
@@ -622,7 +649,10 @@
               {
                 "id": "custom.lineStyle",
                 "value": {
-                  "dash": [5, 10],
+                  "dash": [
+                    5,
+                    10
+                  ],
                   "fill": "dash"
                 }
               }
@@ -679,9 +709,9 @@
             "fillOpacity": 80,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
@@ -705,8 +735,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -723,7 +752,10 @@
       "id": 7,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": [
+            "mean",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -768,7 +800,7 @@
             "align": "auto",
             "cellOptions": {
               "type": "auto"
-                },
+            },
             "inspect": false
           },
           "mappings": [],
@@ -776,8 +808,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "yellow",
@@ -848,7 +879,9 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": ["sum"],
+          "reducer": [
+            "sum"
+          ],
           "show": false
         },
         "showHeader": true
@@ -883,9 +916,9 @@
             "fillOpacity": 10,
             "gradientMode": "none",
             "hideFrom": {
+              "legend": false,
               "tooltip": false,
-              "viz": false,
-              "legend": false
+              "viz": false
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
@@ -909,8 +942,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -927,7 +959,10 @@
       "id": 9,
       "options": {
         "legend": {
-          "calcs": ["mean", "last"],
+          "calcs": [
+            "mean",
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -949,30 +984,31 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "",
-  "schemaVersion": 39,
-  "tags": ["v3", "trends", "forecasts", "capacity-planning"],
+  "schemaVersion": 42,
+  "tags": [
+    "v3",
+    "trends",
+    "forecasts",
+    "capacity-planning"
+  ],
   "templating": {
     "list": [
       {
         "current": {
-          "selected": false,
           "text": "All",
-          "value": "All"
+          "value": "$__all"
         },
         "datasource": "Pepsico Cost Analytics",
         "definition": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
-        "hide": 0,
         "includeAll": true,
         "label": "Controller",
-        "multi": false,
         "name": "controller",
         "options": [],
         "query": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       }
     ]
@@ -984,7 +1020,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Trends and Forecasts (Enhanced) - v3",
-  "uid": "trends-forecasts-enhanced-v3",
-  "version": 0,
-  "weekStart": ""
+  "uid": "trends-forecasts-v3",
+  "version": 0
 }

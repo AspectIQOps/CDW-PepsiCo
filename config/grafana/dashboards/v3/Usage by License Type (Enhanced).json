@@ -76,7 +76,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -84,7 +84,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"APM Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'APM'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"APM Units\"\nFROM mv_daily_usage_by_capability\nWHERE capability_code = 'APM'\n  AND usage_date >= $__timeFrom()::date\n  AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -133,7 +133,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -141,7 +141,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"MRUM Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'MRUM'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"MRUM Units\"\nFROM mv_daily_usage_by_capability\nWHERE capability_code = 'MRUM'\n  AND usage_date >= $__timeFrom()::date\n  AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -190,7 +190,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -198,11 +198,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Synthetic Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'Synthetic'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Synthetic Units\"\nFROM mv_daily_usage_by_capability\nWHERE capability_code = 'Synthetic'\n  AND usage_date >= $__timeFrom()::date\n  AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "Synthetic Total Units (0 in test data)",
+      "title": "Synthetic Total Units",
       "type": "stat"
     },
     {
@@ -247,7 +247,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -255,11 +255,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"DB Units\"\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE c.capability_code = 'DB'\n  AND lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"DB Units\"\nFROM mv_daily_usage_by_capability\nWHERE capability_code = 'DB'\n  AND usage_date >= $__timeFrom()::date\n  AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "DB Total Units (0 in test data)",
+      "title": "DB Total Units",
       "type": "stat"
     },
     {
@@ -359,7 +359,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lu.ts) as time,\n  c.capability_code as metric,\n  COALESCE(SUM(lu.units_consumed), 0) as value\nFROM license_usage_fact lu\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lu.ts), c.capability_code\nORDER BY DATE(lu.ts), c.capability_code",
+          "rawSql": "SELECT \n  usage_date as time,\n  capability_code as metric,\n  COALESCE(SUM(total_units), 0) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
           "refId": "A"
         }
       ],
@@ -429,7 +429,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Peak Tier Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE UPPER(COALESCE(lu.tier, '')) = 'PEAK'\n  AND lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Peak Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -486,7 +486,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(lu.units_consumed), 0) as \"Pro Tier Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nWHERE UPPER(COALESCE(lu.tier, '')) = 'PRO'\n  AND lu.ts >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Pro Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -583,7 +583,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  a.appd_application_name as \"Application\",\n  COALESCE(SUM(lu.units_consumed), 0) as \"Total Units\"\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nJOIN capabilities_dim c ON lu.capability_id = c.capability_id\nWHERE lu.ts >= NOW() - INTERVAL '90 days'\n  AND a.appd_application_name IS NOT NULL\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name\nHAVING SUM(lu.units_consumed) > 0\nORDER BY \"Total Units\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  app_name as \"Application\",\n  SUM(total_units) as \"Total Units\"\nFROM (\n  SELECT \n    (SELECT appd_application_name FROM applications_dim WHERE app_id IN (\n      SELECT DISTINCT app_id FROM license_usage_fact \n      WHERE ts >= NOW() - INTERVAL '90 days'\n      LIMIT 1\n    )) as app_name,\n    SUM(total_units) as total_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= NOW() - INTERVAL '90 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY controller\n) sub\nWHERE app_name IS NOT NULL\nGROUP BY app_name\nHAVING SUM(total_units) > 0\nORDER BY \"Total Units\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -630,6 +630,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Usage by License Type (Enhanced) - v3",
-  "uid": "usage-by-license-type-enhanced-v3",
+  "uid": "usage-by-license-enhanced-v3",
   "version": 0
 }

@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
+  "id": 111,
   "links": [],
   "panels": [
     {
@@ -39,19 +39,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": [
-                "sum"
-              ]
-            },
-            "inspect": false
+            "mode": "continuous-GrYlRd"
           },
           "mappings": [],
           "thresholds": {
@@ -60,6 +48,10 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           }
@@ -74,12 +66,6 @@
               {
                 "id": "unit",
                 "value": "currencyUSD"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
               },
               {
                 "id": "color",
@@ -148,12 +134,6 @@
                 "value": 2
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
                 "id": "color",
                 "value": {
                   "mode": "continuous-GrYlRd"
@@ -164,30 +144,42 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
         "y": 1
       },
       "id": 1,
       "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": false,
-            "displayName": "Efficiency Ratio"
-          }
-        ]
+        "displayMode": "lcd",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH date_filter AS (\n  SELECT \n    NOW() - INTERVAL '90 days' as start_ts,\n    NOW() as end_ts\n),\nusage_by_app AS (\n  SELECT \n    lu.app_id,\n    SUM(lu.units_consumed) as units,\n    AVG(lu.nodes_count) as avg_nodes\n  FROM license_usage_fact lu, date_filter df\n  WHERE lu.ts >= df.start_ts AND lu.ts <= df.end_ts\n  GROUP BY lu.app_id\n),\ncost_by_app AS (\n  SELECT \n    lc.app_id,\n    SUM(lc.usd_cost) as cost\n  FROM license_cost_fact lc, date_filter df\n  WHERE lc.ts >= df.start_ts AND lc.ts <= df.end_ts\n  GROUP BY lc.app_id\n),\napps_with_arch AS (\n  SELECT \n    a.app_id,\n    COALESCE(ar.pattern_name, 'Unknown') as arch_name\n  FROM applications_dim a\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  WHERE '$controller' = 'All' OR a.appd_controller = '$controller'\n)\nSELECT \n  awa.arch_name as \"Architecture\",\n  COUNT(DISTINCT awa.app_id) as \"App Count\",\n  COALESCE(SUM(u.units), 0) as \"Total Units\",\n  ROUND(AVG(u.avg_nodes)::numeric, 2) as \"Avg Nodes\",\n  CASE \n    WHEN AVG(u.avg_nodes) > 0 \n    THEN ROUND((SUM(u.units) / AVG(u.avg_nodes))::numeric, 2)\n    ELSE 0 \n  END as \"Units per Node\",\n  COALESCE(SUM(c.cost), 0) as \"Total Cost\",\n  CASE \n    WHEN COUNT(DISTINCT awa.app_id) > 0 \n    THEN SUM(c.cost) / COUNT(DISTINCT awa.app_id)\n    ELSE 0 \n  END as \"Cost per App\"\nFROM apps_with_arch awa\nLEFT JOIN usage_by_app u ON awa.app_id = u.app_id\nLEFT JOIN cost_by_app c ON awa.app_id = c.app_id\nGROUP BY awa.arch_name\nHAVING COUNT(DISTINCT awa.app_id) > 0\n   AND (SUM(u.units) > 0 OR SUM(c.cost) > 0)\nORDER BY COALESCE(SUM(c.cost), 0) DESC",
+          "rawSql": "SELECT \n  architecture_name as \"Architecture\",\n  SUM(app_count) as \"App Count\",\n  COALESCE(SUM(total_units), 0) as \"Total Units\",\n  ROUND(AVG(avg_nodes)::numeric, 2) as \"Avg Nodes\",\n  COALESCE(SUM(units_per_node), 0) as \"Units per Node\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\",\n  CASE \n    WHEN SUM(app_count) > 0 \n    THEN SUM(total_cost) / SUM(app_count)\n    ELSE 0 \n  END as \"Cost per App\"\nFROM mv_architecture_metrics_90d\nWHERE ('$controller' = 'All' OR controller = '$controller')\nGROUP BY architecture_name\nHAVING SUM(app_count) > 0\n   AND (SUM(total_units) > 0 OR SUM(total_cost) > 0)\nORDER BY COALESCE(SUM(total_cost), 0) DESC",
           "refId": "A",
           "sql": {
             "columns": [
@@ -209,7 +201,7 @@
         }
       ],
       "title": "Architecture Efficiency Summary",
-      "type": "table"
+      "type": "bargauge"
     },
     {
       "collapsed": false,
@@ -217,7 +209,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 10
       },
       "id": 101,
       "panels": [],
@@ -270,7 +262,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 11
       },
       "id": 2,
       "options": {
@@ -295,12 +287,12 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH arch_costs AS (\n  SELECT \n    COALESCE(ar.pattern_name, 'Unknown') as architecture,\n    COUNT(DISTINCT a.app_id) as app_count,\n    COALESCE(SUM(lc.usd_cost), 0) as total_cost\n  FROM applications_dim a\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  LEFT JOIN license_cost_fact lc ON a.app_id = lc.app_id AND lc.ts >= NOW() - INTERVAL '90 days'\n  WHERE ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY COALESCE(ar.pattern_name, 'Unknown')\n)\nSELECT \n  architecture as architecture_pattern,\n  CASE WHEN app_count > 0 THEN total_cost / NULLIF(app_count, 0) ELSE 0 END as cost\nFROM arch_costs\nWHERE app_count > 0\nORDER BY cost DESC",
+          "rawSql": "SELECT \n  architecture_name as architecture_pattern,\n  CASE WHEN SUM(app_count) > 0 THEN SUM(total_cost) / NULLIF(SUM(app_count), 0) ELSE 0 END as cost\nFROM mv_architecture_metrics_90d\nWHERE ('$controller' = 'All' OR controller = '$controller')\nGROUP BY architecture_name\nHAVING SUM(app_count) > 0\nORDER BY cost DESC",
           "refId": "A"
         }
       ],
@@ -330,7 +322,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 11
       },
       "id": 3,
       "options": {
@@ -358,12 +350,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(ar.pattern_name, 'Unknown') as architecture_pattern,\n  COUNT(DISTINCT a.app_id) as count\nFROM applications_dim a\nLEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\nWHERE ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY COALESCE(ar.pattern_name, 'Unknown')\nHAVING COUNT(DISTINCT a.app_id) > 0\nORDER BY count DESC",
+          "rawSql": "SELECT \n  architecture_name as architecture_pattern,\n  SUM(app_count) as count\nFROM mv_architecture_metrics_90d\nWHERE ('$controller' = 'All' OR controller = '$controller')\nGROUP BY architecture_name\nHAVING SUM(app_count) > 0\nORDER BY count DESC",
           "refId": "A"
         }
       ],
@@ -416,7 +408,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 19
       },
       "id": 6,
       "options": {
@@ -444,12 +436,12 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(ar.pattern_name, 'Unknown') as architecture_pattern,\n  COALESCE(SUM(lc.usd_cost), 0) as \"Total Cost\"\nFROM applications_dim a\nLEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\nLEFT JOIN license_cost_fact lc ON a.app_id = lc.app_id AND lc.ts >= NOW() - INTERVAL '90 days'\nWHERE ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY COALESCE(ar.pattern_name, 'Unknown')\nHAVING SUM(lc.usd_cost) > 0\nORDER BY \"Total Cost\" DESC",
+          "rawSql": "SELECT \n  architecture_name as architecture_pattern,\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_architecture_metrics_90d\nWHERE ('$controller' = 'All' OR controller = '$controller')\nGROUP BY architecture_name\nHAVING SUM(total_cost) > 0\nORDER BY \"Total Cost\" DESC",
           "refId": "A"
         }
       ],
@@ -462,7 +454,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 27
       },
       "id": 102,
       "panels": [],
@@ -474,17 +466,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false
+            "mode": "continuous-GrYlRd"
           },
           "mappings": [],
           "thresholds": {
@@ -493,6 +475,10 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           }
@@ -511,12 +497,6 @@
               {
                 "id": "decimals",
                 "value": 0
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
               },
               {
                 "id": "color",
@@ -541,12 +521,6 @@
                 "value": 0
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
                 "id": "color",
                 "value": {
                   "mode": "continuous-GrYlRd"
@@ -567,12 +541,6 @@
               {
                 "id": "decimals",
                 "value": 0
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
               },
               {
                 "id": "color",
@@ -597,12 +565,6 @@
                 "value": 0
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
                 "id": "color",
                 "value": {
                   "mode": "continuous-GrYlRd"
@@ -625,20 +587,10 @@
                 "value": 0
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
                 "id": "color",
                 "value": {
                   "mode": "continuous-GrYlRd"
                 }
-              },
-              {
-                "id": "custom.width",
-                "value": 150
               }
             ]
           },
@@ -647,12 +599,7 @@
               "id": "byName",
               "options": "App Count"
             },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 100
-              }
-            ]
+            "properties": []
           }
         ]
       },
@@ -660,30 +607,42 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 28
       },
       "id": 4,
       "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Total Units/App"
-          }
-        ]
+        "displayMode": "lcd",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [],
+          "fields": "",
+          "values": true
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH arch_license_usage AS (\n  SELECT \n    COALESCE(ar.pattern_name, 'Unknown') as architecture,\n    c.capability_code,\n    COUNT(DISTINCT a.app_id) as app_count,\n    COALESCE(SUM(lu.units_consumed), 0) as total_units\n  FROM applications_dim a\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  LEFT JOIN license_usage_fact lu ON a.app_id = lu.app_id AND lu.ts >= NOW() - INTERVAL '90 days'\n  LEFT JOIN capabilities_dim c ON lu.capability_id = c.capability_id\n  WHERE ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY ar.pattern_name, c.capability_code\n)\nSELECT \n  architecture as \"Architecture\",\n  MAX(CASE WHEN capability_code = 'APM' THEN app_count ELSE 0 END) as \"App Count\",\n  COALESCE(MAX(CASE WHEN capability_code = 'APM' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"APM Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'MRUM' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"MRUM Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'Synthetic' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"Synthetic Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'DB' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"DB Units/App\",\n  COALESCE(SUM(total_units) / NULLIF(MAX(CASE WHEN capability_code = 'APM' THEN app_count END), 0), 0)::integer as \"Total Units/App\"\nFROM arch_license_usage\nGROUP BY architecture\nHAVING MAX(CASE WHEN capability_code = 'APM' THEN app_count END) > 0\nORDER BY \"Total Units/App\" DESC",
+          "rawSql": "SELECT \n  architecture_name as \"Architecture\",\n  MAX(CASE WHEN capability_code = 'APM' THEN app_count ELSE 0 END) as \"App Count\",\n  COALESCE(MAX(CASE WHEN capability_code = 'APM' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"APM Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'MRUM' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"MRUM Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'Synthetic' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"Synthetic Units/App\",\n  COALESCE(MAX(CASE WHEN capability_code = 'DB' THEN total_units / NULLIF(app_count, 0) END), 0)::integer as \"DB Units/App\",\n  COALESCE(SUM(total_units) / NULLIF(MAX(CASE WHEN capability_code = 'APM' THEN app_count END), 0), 0)::integer as \"Total Units/App\"\nFROM mv_architecture_metrics_90d\nWHERE ('$controller' = 'All' OR controller = '$controller')\nGROUP BY architecture_name\nHAVING MAX(CASE WHEN capability_code = 'APM' THEN app_count END) > 0\nORDER BY \"Total Units/App\" DESC",
           "refId": "A"
         }
       ],
       "title": "Average Units per Application by Architecture & License Type",
-      "type": "table"
+      "type": "bargauge"
     },
     {
       "collapsed": false,
@@ -691,7 +650,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 36
       },
       "id": 103,
       "panels": [],
@@ -757,7 +716,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 37
       },
       "id": 5,
       "options": {
@@ -777,12 +736,12 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0",
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lu.ts) as time,\n  COALESCE(ar.pattern_name, 'Unknown') as metric,\n  COALESCE(SUM(lu.units_consumed), 0) as value\nFROM license_usage_fact lu\nJOIN applications_dim a ON lu.app_id = a.app_id\nLEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\nWHERE lu.ts >= $__timeFrom()::timestamptz\n  AND lu.ts <= $__timeTo()::timestamptz\nGROUP BY DATE(lu.ts), ar.pattern_name\nORDER BY DATE(lu.ts), ar.pattern_name",
+          "rawSql": "WITH daily_arch_usage AS (\n  SELECT \n    usage_date as time,\n    architecture_name as metric,\n    SUM(total_units) as value\n  FROM mv_daily_usage_by_capability duv\n  JOIN applications_dim a ON duv.controller = a.appd_controller\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  WHERE usage_date >= $__timeFrom()::date\n    AND usage_date <= $__timeTo()::date\n  GROUP BY usage_date, ar.pattern_name\n)\nSELECT time, metric, COALESCE(SUM(value), 0) as value\nFROM daily_arch_usage\nGROUP BY time, metric\nORDER BY time, metric",
           "refId": "A"
         }
       ],

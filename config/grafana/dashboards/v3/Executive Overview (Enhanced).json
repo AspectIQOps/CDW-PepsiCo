@@ -213,9 +213,28 @@
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT \n  CASE \n    WHEN COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL) = 0 THEN 0\n    ELSE (COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL)::float / \n          COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL)::float) * 100\n  END as \"Match Rate\"\nFROM applications_dim",
-          "refId": "A"
+          "rawQuery": true,
+          "rawSql": "SELECT \n  CASE \n    WHEN COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL) = 0 THEN 0\n    ELSE (COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL AND sn_sys_id IS NOT NULL)::float / \n          COUNT(*) FILTER (WHERE appd_application_id IS NOT NULL)::float) * 100\n  END as \"Match Rate\"\nFROM applications_dim\nWHERE ('$controller' = 'All' OR appd_controller = '$controller')",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
         }
       ],
       "title": "CMDB Match Rate",
@@ -276,7 +295,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH daily_totals AS (\n  SELECT \n    DATE(lc.ts) as day,\n    SUM(lc.usd_cost) as daily_cost\n  FROM license_cost_fact lc\n  JOIN applications_dim a ON lc.app_id = a.app_id\n  WHERE lc.ts >= NOW() - INTERVAL '60 days'\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY DATE(lc.ts)\n  ORDER BY day DESC\n  LIMIT 30\n),\nperiods AS (\n  SELECT \n    AVG(CASE WHEN day >= NOW() - INTERVAL '30 days' THEN daily_cost END) as recent_avg,\n    AVG(CASE WHEN day < NOW() - INTERVAL '30 days' THEN daily_cost END) as previous_avg\n  FROM daily_totals\n)\nSELECT \n  CASE \n    WHEN previous_avg IS NULL OR previous_avg = 0 THEN 0\n    ELSE ((recent_avg - previous_avg) / NULLIF(previous_avg, 0)) * 100\n  END as \"Cost Trend\"\nFROM periods",
+          "rawSql": "WITH daily_totals AS (\n  SELECT \n    cost_date as day,\n    SUM(total_cost) as daily_cost\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '60 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY cost_date\n  ORDER BY day DESC\n  LIMIT 30\n),\nperiods AS (\n  SELECT \n    AVG(CASE WHEN day >= NOW() - INTERVAL '30 days' THEN daily_cost END) as recent_avg,\n    AVG(CASE WHEN day < NOW() - INTERVAL '30 days' THEN daily_cost END) as previous_avg\n  FROM daily_totals\n)\nSELECT \n  CASE \n    WHEN previous_avg IS NULL OR previous_avg = 0 THEN 0\n    ELSE ((recent_avg - previous_avg) / NULLIF(previous_avg, 0)) * 100\n  END as \"Cost Trend\"\nFROM periods",
           "refId": "A"
         }
       ],
@@ -381,7 +400,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  DATE(lc.ts) as time,\n  'Daily Cost' as metric,\n  COALESCE(SUM(lc.usd_cost), 0) as value\nFROM license_cost_fact lc\nJOIN applications_dim a ON lc.app_id = a.app_id\nWHERE lc.ts >= $__timeFrom()::timestamptz\n  AND lc.ts <= $__timeTo()::timestamptz\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE(lc.ts)\nORDER BY DATE(lc.ts)",
+          "rawSql": "SELECT \n  cost_date as time,\n  'Daily Cost' as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date\n  AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date\nORDER BY cost_date",
           "refId": "A"
         }
       ],
