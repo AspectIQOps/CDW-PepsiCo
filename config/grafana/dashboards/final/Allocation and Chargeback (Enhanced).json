@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 0,
   "links": [],
   "panels": [
     {
@@ -84,7 +83,7 @@
           "values": false
         },
         "showPercentChange": true,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -141,7 +140,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -198,7 +197,7 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "value_and_name",
+        "textMode": "value",
         "wideLayout": true
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
@@ -540,11 +539,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  a.appd_application_name,\n  SUM(c.usd_amount) as \"Cost\"\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start = (SELECT MAX(month_start) FROM chargeback_fact)\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name\nORDER BY \"Cost\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n  a.appd_application_name,\n  SUM(c.usd_amount) as \"Cost\"\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name\nORDER BY \"Cost\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
-      "title": "Top 20 Applications by Cost (Filtered by Sector)",
+      "title": "Top 20 Applications by Cost",
       "type": "barchart"
     },
     {
@@ -1059,15 +1058,15 @@
       {
         "current": {
           "text": "All",
-          "value": "$__all"
+          "value": "All"
         },
         "datasource": "Pepsico Cost Analytics",
-        "definition": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
-        "includeAll": true,
+        "definition": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
+        "includeAll": false,
         "label": "Controller",
         "name": "controller",
         "options": [],
-        "query": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
+        "query": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
         "refresh": 1,
         "regex": "",
         "type": "query"
@@ -1075,15 +1074,15 @@
       {
         "current": {
           "text": "All",
-          "value": "$__all"
+          "value": "All"
         },
         "datasource": "Pepsico Cost Analytics",
-        "definition": "SELECT DISTINCT sector_name FROM sectors_dim ORDER BY sector_name",
-        "includeAll": true,
+        "definition": "SELECT 'All' as sector_name\nUNION\nSELECT DISTINCT sector_name\nFROM sectors_dim\nWHERE sector_name IS NOT NULL\nORDER BY sector_name",
+        "includeAll": false,
         "label": "Sector",
         "name": "sector",
         "options": [],
-        "query": "SELECT DISTINCT sector_name FROM sectors_dim ORDER BY sector_name",
+        "query": "SELECT 'All' as sector_name\nUNION\nSELECT DISTINCT sector_name\nFROM sectors_dim\nWHERE sector_name IS NOT NULL\nORDER BY sector_name",
         "refresh": 1,
         "regex": "",
         "type": "query"
@@ -1098,5 +1097,5 @@
   "timezone": "browser",
   "title": "Allocation and Chargeback (Enhanced) - v3",
   "uid": "allocation-chargeback-enhanced-v3",
-  "version": 0
+  "version": 5
 }

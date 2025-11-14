@@ -149,6 +149,15 @@ def populate_applications(conn):
 
     apps_created = 0
 
+    # Get existing app IDs to avoid duplicates
+    cursor.execute("SELECT MAX(CAST(SUBSTRING(appd_application_id FROM 6) AS INTEGER)) FROM applications_dim WHERE appd_application_id LIKE 'appd_%'")
+    result = cursor.fetchone()[0]
+    start_idx = (result + 1) if result else 0
+
+    cursor.execute("SELECT MAX(CAST(SUBSTRING(sn_sys_id FROM 4) AS INTEGER)) FROM applications_dim WHERE sn_sys_id LIKE 'sn_%'")
+    result = cursor.fetchone()[0]
+    sn_start_idx = (result + 1) if result else 0
+
     # Create 60 applications across controllers
     for i in range(60):
         controller = random.choice(CONTROLLERS)
@@ -159,32 +168,39 @@ def populate_applications(conn):
         tier = random.choice(TIERS)
         h_code = random.choice(H_CODES) if random.random() > 0.15 else None  # 85% coverage
 
-        # Create ServiceNow sys_id for 70% of apps
-        sn_sys_id = f"sn_{i:04d}" if random.random() > 0.3 else None
+        # Create ServiceNow sys_id for 70% of apps (using unique index)
+        sn_sys_id = f"sn_{sn_start_idx + i:04d}" if random.random() > 0.3 else None
 
-        cursor.execute("""
-            INSERT INTO applications_dim (
-                appd_application_id, appd_application_name, appd_controller,
-                sn_sys_id, sn_service_name, h_code,
-                owner_id, sector_id, architecture_id, license_tier,
-                metadata
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
-        """, (
-            f"appd_{i:04d}",
-            app_name,
-            controller,
-            sn_sys_id,
-            app_name if sn_sys_id else None,
-            h_code,
-            owner[0],
-            sector[0],
-            arch[0],
-            tier,
-            f'{{"tier_count": {random.randint(1, 15)}, "node_count": {random.randint(2, 50)}}}'
-        ))
-        apps_created += 1
+        try:
+            cursor.execute("""
+                INSERT INTO applications_dim (
+                    appd_application_id, appd_application_name, appd_controller,
+                    sn_sys_id, sn_service_name, h_code,
+                    owner_id, sector_id, architecture_id, license_tier,
+                    metadata
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                RETURNING app_id
+            """, (
+                f"appd_{start_idx + i:04d}",
+                app_name,
+                controller,
+                sn_sys_id,
+                app_name if sn_sys_id else None,
+                h_code,
+                owner[0],
+                sector[0],
+                arch[0],
+                tier,
+                f'{{"tier_count": {random.randint(1, 15)}, "node_count": {random.randint(2, 50)}}}'
+            ))
+            if cursor.fetchone():
+                apps_created += 1
+        except psycopg2.errors.UniqueViolation:
+            # Skip duplicates
+            conn.rollback()
+            pass
 
     conn.commit()
     print(f"   ✓ Created {apps_created} applications")
@@ -263,13 +279,14 @@ def populate_usage_and_costs(conn):
     cursor.execute("SELECT capability_id, capability_code FROM capabilities_dim")
     capabilities = cursor.fetchall()
 
-    # Get price config
+    # Get price config with IDs
     cursor.execute("""
-        SELECT pc.capability_id, pc.tier, pc.unit_rate
+        SELECT pc.price_id, pc.capability_id, pc.tier, pc.unit_rate
         FROM price_config pc
         WHERE pc.end_date IS NULL OR pc.end_date > CURRENT_DATE
     """)
-    prices = {(row[0], row[1]): row[2] for row in cursor.fetchall()}
+    # Map (capability_id, tier) -> (price_id, unit_rate)
+    prices = {(row[1], row[2]): (row[0], row[3]) for row in cursor.fetchall()}
 
     # Generate data for last 6 months (daily)
     end_date = datetime.now()
@@ -277,6 +294,11 @@ def populate_usage_and_costs(conn):
 
     usage_records = 0
     cost_records = 0
+
+    # Batch inserts
+    usage_batch = []
+    cost_batch = []
+    BATCH_SIZE = 5000
 
     print("   Generating daily data points...")
 
@@ -295,12 +317,8 @@ def populate_usage_and_costs(conn):
                 daily_variation = random.uniform(0.8, 1.2)
                 units = base_usage * growth_factor * daily_variation
 
-                # Insert usage
-                cursor.execute("""
-                    INSERT INTO license_usage_fact (
-                        ts, app_id, capability_id, tier, units_consumed, nodes_count
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
+                # Add to batch
+                usage_batch.append((
                     current_date,
                     app_id,
                     cap_id,
@@ -310,37 +328,57 @@ def populate_usage_and_costs(conn):
                 ))
                 usage_records += 1
 
-                # Calculate and insert cost
+                # Calculate and add cost to batch
                 price_key = (cap_id, tier)
                 if price_key in prices:
-                    cost = Decimal(str(units)) * prices[price_key]
+                    price_id, unit_rate = prices[price_key]
+                    cost = Decimal(str(units)) * unit_rate
 
-                    cursor.execute("""
-                        INSERT INTO license_cost_fact (
-                            ts, app_id, capability_id, tier, usd_cost, price_id
-                        ) VALUES (%s, %s, %s, %s, %s,
-                            (SELECT price_id FROM price_config
-                             WHERE capability_id = %s AND tier = %s
-                             AND (end_date IS NULL OR end_date > CURRENT_DATE)
-                             LIMIT 1)
-                        )
-                    """, (
+                    cost_batch.append((
                         current_date,
                         app_id,
                         cap_id,
                         tier,
                         round(cost, 2),
-                        cap_id,
-                        tier
+                        price_id
                     ))
                     cost_records += 1
 
+                # Insert batches when ready
+                if len(usage_batch) >= BATCH_SIZE:
+                    cursor.executemany("""
+                        INSERT INTO license_usage_fact (
+                            ts, app_id, capability_id, tier, units_consumed, nodes_count
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, usage_batch)
+                    usage_batch = []
+
+                    cursor.executemany("""
+                        INSERT INTO license_cost_fact (
+                            ts, app_id, capability_id, tier, usd_cost, price_id
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, cost_batch)
+                    cost_batch = []
+
+                    conn.commit()
+                    print(f"      {usage_records:,} usage records, {cost_records:,} cost records...")
+
             current_date += timedelta(days=1)
 
-            # Commit every 1000 records
-            if usage_records % 1000 == 0:
-                conn.commit()
-                print(f"      {usage_records:,} usage records, {cost_records:,} cost records...")
+    # Insert remaining records
+    if usage_batch:
+        cursor.executemany("""
+            INSERT INTO license_usage_fact (
+                ts, app_id, capability_id, tier, units_consumed, nodes_count
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+        """, usage_batch)
+
+    if cost_batch:
+        cursor.executemany("""
+            INSERT INTO license_cost_fact (
+                ts, app_id, capability_id, tier, usd_cost, price_id
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+        """, cost_batch)
 
     conn.commit()
     print(f"   ✓ Created {usage_records:,} usage records")
