@@ -92,7 +92,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  SUM(total_amount) as \"Total Chargeback\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT\n  SUM(total_amount) as \"Total Chargeback\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -149,7 +149,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  COUNT(DISTINCT sector_name) as \"Sectors Charged\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
+          "rawSql": "SELECT\n  COUNT(DISTINCT sector_name) as \"Sectors Charged\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
           "refId": "A"
         }
       ],
@@ -206,7 +206,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  AVG(total_amount) as \"Avg per Sector\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
+          "rawSql": "SELECT\n  AVG(total_amount) as \"Avg per Sector\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
           "refId": "A"
         }
       ],
@@ -271,7 +271,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC\nLIMIT 10",
+          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -354,7 +354,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  sector_name,\n  SUM(total_amount) as \"Chargeback Amount\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY \"Chargeback Amount\" DESC\nLIMIT 15",
+          "rawSql": "SELECT\n  sector_name,\n  SUM(total_amount) as \"Chargeback Amount\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY \"Chargeback Amount\" DESC\nLIMIT 15",
           "refId": "A"
         }
       ],
@@ -444,7 +444,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  month_start as time,\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name IN (\n    SELECT sector_name\n    FROM mv_monthly_chargeback_summary\n    WHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n    GROUP BY sector_name\n    ORDER BY SUM(total_amount) DESC\n    LIMIT 5\n  )\nGROUP BY month_start, sector_name\nORDER BY month_start, sector_name",
+          "rawSql": "SELECT\n  month_start as time,\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary) - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name IN (\n    SELECT sector_name\n    FROM mv_monthly_chargeback_summary\n    WHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n    GROUP BY sector_name\n    ORDER BY SUM(total_amount) DESC\n    LIMIT 5\n  )\nGROUP BY month_start, sector_name\nORDER BY month_start, sector_name",
           "refId": "A"
         }
       ],
@@ -540,7 +540,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  a.appd_application_name,\n  SUM(c.usd_amount) as \"Cost\"\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  AND ('$sector' = 'All' OR EXISTS (\n    SELECT 1 FROM sectors_dim s\n    WHERE s.sector_id = c.sector_id\n    AND s.sector_name = '$sector'\n  ))\nGROUP BY a.appd_application_name\nORDER BY \"Cost\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n  a.appd_application_name,\n  SUM(c.usd_amount) as \"Cost\"\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start = (SELECT MAX(month_start) FROM chargeback_fact)\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY a.appd_application_name\nORDER BY \"Cost\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],
@@ -606,7 +606,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(app_count) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC",
+          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(app_count) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC",
           "refId": "A"
         }
       ],
@@ -785,7 +785,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  COUNT(CASE WHEN h_code IS NOT NULL AND h_code != 'Unknown' THEN 1 END)::float / NULLIF(COUNT(*), 0) as \"H-Code Coverage\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT\n  COUNT(CASE WHEN h_code IS NOT NULL AND h_code != 'Unknown' THEN 1 END)::float / NULLIF(COUNT(*), 0) as \"H-Code Coverage\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -852,7 +852,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY value DESC\nLIMIT 15",
+          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY value DESC\nLIMIT 15",
           "refId": "A"
         }
       ],
@@ -935,7 +935,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as h_code,\n  SUM(total_amount) as \"Cost\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY \"Cost\" DESC\nLIMIT 20",
+          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as h_code,\n  SUM(total_amount) as \"Cost\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY \"Cost\" DESC\nLIMIT 20",
           "refId": "A"
         }
       ],

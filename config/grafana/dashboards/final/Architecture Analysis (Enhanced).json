@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 111,
+  "id": 115,
   "links": [],
   "panels": [
     {
@@ -741,7 +741,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "WITH daily_arch_usage AS (\n  SELECT \n    usage_date as time,\n    architecture_name as metric,\n    SUM(total_units) as value\n  FROM mv_daily_usage_by_capability duv\n  JOIN applications_dim a ON duv.controller = a.appd_controller\n  LEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\n  WHERE usage_date >= $__timeFrom()::date\n    AND usage_date <= $__timeTo()::date\n  GROUP BY usage_date, ar.pattern_name\n)\nSELECT time, metric, COALESCE(SUM(value), 0) as value\nFROM daily_arch_usage\nGROUP BY time, metric\nORDER BY time, metric",
+          "rawSql": "SELECT \n  duv.usage_date as time,\n  COALESCE(ar.pattern_name, 'Unknown') as metric,\n  SUM(duv.total_units) as value\nFROM mv_daily_usage_by_capability duv\nLEFT JOIN applications_dim a ON duv.controller = a.appd_controller\nLEFT JOIN architecture_dim ar ON a.architecture_id = ar.architecture_id\nWHERE duv.usage_date >= $__timeFrom()::date\n  AND duv.usage_date <= $__timeTo()::date\nGROUP BY duv.usage_date, ar.pattern_name\nORDER BY duv.usage_date, ar.pattern_name",
           "refId": "A"
         }
       ],
@@ -788,6 +788,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Architecture Analysis (Enhanced) - v3",
-  "uid": "architecture-analysis-enhanced-v3",
-  "version": 0
+  "uid": "architecture-analysis-enhanced-v3-2",
+  "version": 1
 }

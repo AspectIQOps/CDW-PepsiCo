@@ -90,7 +90,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
         "y": 1
@@ -117,7 +117,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  cost_date as time,\n  SUM(total_cost) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date\nORDER BY cost_date",
+          "rawSql": "SELECT\n  cost_date as time,\n  SUM(total_cost) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND controller IN (${controller})\nGROUP BY cost_date\nORDER BY cost_date",
           "refId": "A"
         }
       ],
@@ -180,10 +180,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 10
       },
       "id": 2,
       "options": {
@@ -207,7 +207,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  cost_date as time,\n  sector_name as metric,\n  SUM(total_cost) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
+          "rawSql": "SELECT\n  cost_date as time,\n  sector_name as metric,\n  SUM(total_cost) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND controller IN (${controller})\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
           "refId": "A"
         }
       ],
@@ -270,10 +270,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 10
       },
       "id": 3,
       "options": {
@@ -297,7 +297,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  usage_date as time,\n  capability_code as metric,\n  SUM(total_units) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
+          "rawSql": "SELECT\n  usage_date as time,\n  capability_code as metric,\n  SUM(total_units) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= NOW() - INTERVAL '24 months'\n  AND controller IN (${controller})\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
           "refId": "A"
         }
       ],
@@ -310,7 +310,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 19
       },
       "id": 101,
       "panels": [],
@@ -399,10 +399,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 20
       },
       "id": 4,
       "options": {
@@ -426,7 +426,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "-- Actual historical costs\nSELECT\n  cost_date as time,\n  'Actual Cost' as metric,\n  SUM(total_cost) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '6 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date\n\nUNION ALL\n\n-- Linear forecast\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Linear Forecast' as metric,\n  SUM(projected_cost) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start > NOW()\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nORDER BY time",
+          "rawSql": "-- Actual historical costs\nSELECT\n  cost_date as time,\n  'Actual Cost' as metric,\n  SUM(total_cost) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '6 months'\n  AND controller IN (${controller})\nGROUP BY cost_date\n\nUNION ALL\n\n-- Linear forecast\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Linear Forecast' as metric,\n  SUM(projected_cost) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start > NOW()\n  AND method = 'linear'\n  AND a.appd_controller IN (${controller})\nGROUP BY DATE_TRUNC('month', month_start)\n\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -438,17 +438,28 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             },
-            "footer": {
-              "reducers": []
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
             },
-            "inspect": false
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
@@ -457,9 +468,14 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
-          }
+          },
+          "unit": "short"
         },
         "overrides": [
           {
@@ -467,12 +483,7 @@
               "id": "byName",
               "options": "Forecast Method"
             },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
+            "properties": []
           },
           {
             "matcher": {
@@ -483,12 +494,6 @@
               {
                 "id": "unit",
                 "value": "currencyUSD"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
               }
             ]
           },
@@ -522,24 +527,42 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 29
       },
       "id": 5,
       "options": {
-        "cellHeight": "sm",
-        "showHeader": true
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
       },
       "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT\n  TO_CHAR(month_start, 'YYYY-MM') as \"Month\",\n  method as \"Forecast Method\",\n  SUM(projected_cost) as \"Projected Cost\",\n  SUM(confidence_interval_low) as \"Low Estimate\",\n  SUM(confidence_interval_high) as \"High Estimate\"\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '12 months'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY month_start, method\nORDER BY month_start, method",
+          "rawSql": "SELECT\n  TO_CHAR(month_start, 'YYYY-MM') as \"Month\",\n  method as \"Forecast Method\",\n  SUM(projected_cost) as \"Projected Cost\",\n  SUM(confidence_interval_low) as \"Low Estimate\",\n  SUM(confidence_interval_high) as \"High Estimate\"\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '12 months'\n  AND a.appd_controller IN (${controller})\nGROUP BY month_start, method\nORDER BY month_start, method",
           "refId": "A"
         }
       ],
       "title": "Forecast Summary by Method (Next 12 Months)",
-      "type": "table"
+      "type": "barchart"
     },
     {
       "collapsed": false,
@@ -547,7 +570,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 37
       },
       "id": 102,
       "panels": [],
@@ -585,6 +608,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -599,7 +623,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -661,10 +686,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 38
       },
       "id": 6,
       "options": {
@@ -675,19 +700,21 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Projected Cost' as metric,\n  SUM(projected_cost) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nUNION ALL\n\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Low Estimate' as metric,\n  SUM(confidence_interval_low) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nUNION ALL\n\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'High Estimate' as metric,\n  SUM(confidence_interval_high) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nORDER BY time",
+          "rawSql": "-- Show forecast data if available, otherwise show 6-month historical trend\nWITH forecast_data AS (\n  SELECT\n    DATE_TRUNC('month', month_start) as time,\n    'Projected Cost' as metric,\n    SUM(projected_cost) as value\n  FROM forecast_fact ff\n  JOIN applications_dim a ON ff.app_id = a.app_id\n  WHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n    AND method = 'linear'\n    AND a.appd_controller IN (${controller})\n  GROUP BY DATE_TRUNC('month', month_start)\n)\nSELECT * FROM forecast_data\nUNION ALL\nSELECT\n  DATE_TRUNC('month', cost_date) as time,\n  'Historical Trend' as metric,\n  AVG(SUM(total_cost)) OVER (ORDER BY DATE_TRUNC('month', cost_date) ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '6 months'\n  AND controller IN (${controller})\nGROUP BY DATE_TRUNC('month', cost_date)\nORDER BY time",
           "refId": "A"
         }
       ],
-      "title": "18-Month Forecast with Confidence Bands",
+      "title": "6-Month Forecast with Confidence Bands",
       "type": "timeseries"
     },
     {
@@ -721,6 +748,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -735,7 +763,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -744,10 +773,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 38
       },
       "id": 7,
       "options": {
@@ -761,15 +790,17 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "WITH monthly_costs AS (\n  SELECT\n    DATE_TRUNC('month', cost_date) as month,\n    EXTRACT(MONTH FROM cost_date) as month_num,\n    SUM(total_cost) as monthly_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '24 months'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY DATE_TRUNC('month', cost_date), EXTRACT(MONTH FROM cost_date)\n)\nSELECT\n  month as time,\n  TO_CHAR(month, 'Month') as metric,\n  AVG(monthly_total) OVER (PARTITION BY month_num) as value\nFROM monthly_costs\nGROUP BY month, month_num, monthly_total\nORDER BY month",
+          "rawSql": "WITH monthly_costs AS (\n  SELECT\n    DATE_TRUNC('month', cost_date) as month,\n    EXTRACT(MONTH FROM cost_date) as month_num,\n    SUM(total_cost) as monthly_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '24 months'\n    AND controller IN (${controller})\n  GROUP BY DATE_TRUNC('month', cost_date), EXTRACT(MONTH FROM cost_date)\n)\nSELECT\n  month as time,\n  TO_CHAR(month, 'Month') as metric,\n  AVG(monthly_total) OVER (PARTITION BY month_num) as value\nFROM monthly_costs\nGROUP BY month, month_num, monthly_total\nORDER BY month",
           "refId": "A"
         }
       ],
@@ -782,7 +813,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 47
       },
       "id": 103,
       "panels": [],
@@ -794,33 +825,44 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             },
-            "inspect": false
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
-              },
-              {
-                "color": "yellow",
-                "value": 0.7
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
-                "value": 0.9
+                "value": 80
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": [
           {
@@ -856,12 +898,6 @@
               {
                 "id": "unit",
                 "value": "percentunit"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
               }
             ]
           }
@@ -871,31 +907,42 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 48
       },
       "id": 8,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
         },
-        "showHeader": true
+        "orientation": "horizontal",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH current_usage AS (\n  SELECT\n    capability_code as license_type,\n    SUM(total_units) as current_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= NOW() - INTERVAL '30 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY capability_code\n),\nforecast_usage AS (\n  SELECT\n    c.capability_code,\n    SUM(ff.projected_units) as forecast_units\n  FROM forecast_fact ff\n  JOIN applications_dim a ON ff.app_id = a.app_id\n  JOIN capabilities_dim c ON ff.capability_id = c.capability_id\n  WHERE month_start = DATE_TRUNC('month', NOW() + INTERVAL '12 months')\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY c.capability_code\n)\nSELECT\n  cu.license_type as \"License Type\",\n  cu.current_units as \"Current Usage\",\n  COALESCE(fu.forecast_units, cu.current_units) as \"Projected Usage (12mo)\",\n  CASE \n    WHEN cu.current_units > 0 THEN\n      (COALESCE(fu.forecast_units, cu.current_units) - cu.current_units) / cu.current_units\n    ELSE 0\n  END as \"Growth Rate\"\nFROM current_usage cu\nLEFT JOIN forecast_usage fu ON cu.license_type = fu.capability_code\nORDER BY cu.current_units DESC",
+          "rawSql": "WITH current_usage AS (\n  SELECT\n    capability_code as license_type,\n    SUM(total_units) as current_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= NOW() - INTERVAL '30 days'\n    AND controller IN (${controller})\n  GROUP BY capability_code\n),\nforecast_usage AS (\n  SELECT\n    c.capability_code,\n    SUM(ff.projected_units) as forecast_units\n  FROM forecast_fact ff\n  JOIN applications_dim a ON ff.app_id = a.app_id\n  JOIN capabilities_dim c ON ff.capability_id = c.capability_id\n  WHERE month_start = DATE_TRUNC('month', NOW() + INTERVAL '12 months')\n    AND a.appd_controller IN (${controller})\n  GROUP BY c.capability_code\n)\nSELECT\n  cu.license_type as \"License Type\",\n  cu.current_units as \"Current Usage\",\n  COALESCE(fu.forecast_units, cu.current_units) as \"Projected Usage (12mo)\",\n  CASE \n    WHEN cu.current_units > 0 THEN\n      (COALESCE(fu.forecast_units, cu.current_units) - cu.current_units) / cu.current_units\n    ELSE 0\n  END as \"Growth Rate\"\nFROM current_usage cu\nLEFT JOIN forecast_usage fu ON cu.license_type = fu.capability_code\nORDER BY cu.current_units DESC",
           "refId": "A"
         }
       ],
       "title": "Capacity Planning by License Type",
-      "type": "table"
+      "type": "barchart"
     },
     {
       "datasource": "Pepsico Cost Analytics",
@@ -928,6 +975,7 @@
               "type": "linear"
             },
             "showPoints": "never",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -942,7 +990,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -954,7 +1003,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 56
       },
       "id": 9,
       "options": {
@@ -968,15 +1017,17 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0-19174562009.patch3",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "-- Historical app count\nSELECT\n  DATE_TRUNC('month', cost_date) as time,\n  'Historical Apps' as metric,\n  COUNT(DISTINCT app_count) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY DATE_TRUNC('month', cost_date)\n\nUNION ALL\n\n-- Projected app count (assume 5% monthly growth)\nSELECT\n  generate_series(\n    DATE_TRUNC('month', NOW()),\n    DATE_TRUNC('month', NOW() + INTERVAL '12 months'),\n    '1 month'::interval\n  ) as time,\n  'Projected Apps' as metric,\n  (\n    SELECT COUNT(DISTINCT app_count)\n    FROM mv_daily_cost_by_controller\n    WHERE cost_date >= NOW() - INTERVAL '30 days'\n      AND ('$controller' = 'All' OR controller = '$controller')\n  ) * POWER(1.05, EXTRACT(MONTH FROM age(generate_series, NOW()))) as value\nFROM generate_series(\n  DATE_TRUNC('month', NOW()),\n  DATE_TRUNC('month', NOW() + INTERVAL '12 months'),\n  '1 month'::interval\n)\n\nORDER BY time",
+          "rawSql": "-- Historical app count\nSELECT\n  DATE_TRUNC('month', cost_date) as time,\n  'Historical Apps' as metric,\n  COUNT(DISTINCT app_count) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '12 months'\n  AND controller IN (${controller})\nGROUP BY DATE_TRUNC('month', cost_date)\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -985,7 +1036,7 @@
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "1h",
   "schemaVersion": 42,
   "tags": [
     "v3",
@@ -1019,7 +1070,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Trends and Forecasts (Enhanced) - v3",
-  "uid": "trends-forecasts-v3",
-  "version": 0
+  "title": "Trends and Forecasts (Enhanced) - v3-3",
+  "uid": "trends-forecasts-v3-3",
+  "version": 5
 }

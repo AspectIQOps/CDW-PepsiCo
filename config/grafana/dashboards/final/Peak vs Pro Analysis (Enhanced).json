@@ -18,9 +18,22 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 106,
+  "id": 0,
   "links": [],
   "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Tier Cost Summary",
+      "type": "row"
+    },
     {
       "datasource": "Pepsico Cost Analytics",
       "fieldConfig": {
@@ -33,8 +46,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 100000
+              },
+              {
+                "color": "orange",
+                "value": 250000
               }
             ]
           },
@@ -46,11 +67,11 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 0
+        "y": 1
       },
       "id": 1,
       "options": {
-        "colorMode": "background_solid",
+        "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
@@ -71,11 +92,72 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Peak Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
-      "title": "90-Day Total Cost",
+      "title": "Peak Tier Cost (90 Days)",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 100000
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Pro Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "Pro Tier Cost (90 Days)",
       "type": "stat"
     },
     {
@@ -92,6 +174,14 @@
               {
                 "color": "blue",
                 "value": 0
+              },
+              {
+                "color": "green",
+                "value": 10000
+              },
+              {
+                "color": "light-green",
+                "value": 50000
               }
             ]
           },
@@ -102,12 +192,70 @@
       "gridPos": {
         "h": 5,
         "w": 6,
-        "x": 6,
-        "y": 0
+        "x": 12,
+        "y": 1
       },
-      "id": 2,
+      "id": 3,
       "options": {
-        "colorMode": "background_solid",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) * 0.33, 0) as \"Potential Savings\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "Potential Savings",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
@@ -128,126 +276,25 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(AVG(daily_total), 0) as \"Avg Daily Cost\"\nFROM (\n  SELECT cost_date, SUM(total_cost) as daily_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR controller = '${controller}')\n  GROUP BY cost_date\n) sub",
+          "rawSql": "WITH tier_costs AS (\n  SELECT \n    SUM(CASE WHEN UPPER(COALESCE(tier, '')) = 'PEAK' THEN total_cost ELSE 0 END) as peak_cost,\n    SUM(total_cost) as total_cost\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n)\nSELECT \n  CASE WHEN total_cost = 0 THEN 0\n  ELSE (peak_cost / NULLIF(total_cost, 0)) * 100 END as \"Peak %\"\nFROM tier_costs",
           "refId": "A"
         }
       ],
-      "title": "Avg Daily Cost",
+      "title": "Peak Tier Percentage",
       "type": "stat"
     },
     {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
+      "collapsed": false,
       "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 12,
-        "y": 0
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
       },
-      "id": 3,
-      "options": {
-        "colorMode": "background_solid",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  COALESCE(MAX(daily_total), 0) as \"Peak Day Cost\"\nFROM (\n  SELECT cost_date, SUM(total_cost) as daily_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('${controller}' = 'All' OR controller = '${controller}')\n  GROUP BY cost_date\n) sub",
-          "refId": "A"
-        }
-      ],
-      "title": "Peak Day Cost",
-      "type": "stat"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "purple",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "background_solid",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "value",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) / NULLIF(SUM(app_count), 0), 0) as \"Avg Cost per App\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
-          "refId": "A"
-        }
-      ],
-      "title": "Avg Cost per App",
-      "type": "stat"
+      "id": 101,
+      "panels": [],
+      "title": "Cost Trends & Distribution",
+      "type": "row"
     },
     {
       "datasource": "Pepsico Cost Analytics",
@@ -265,7 +312,7 @@
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 25,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -284,7 +331,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -302,13 +349,44 @@
           },
           "unit": "currencyUSD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PEAK"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PRO"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 10,
-        "w": 24,
+        "w": 16,
         "x": 0,
-        "y": 5
+        "y": 7
       },
       "id": 5,
       "options": {
@@ -316,7 +394,8 @@
           "calcs": [
             "mean",
             "max",
-            "min"
+            "sum",
+            "lastNotNull"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -333,12 +412,92 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  cost_date as time,\n  sector_name as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
+          "rawSql": "SELECT \n  cost_date as time,\n  UPPER(COALESCE(tier, 'UNKNOWN')) as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date\n  AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date, UPPER(COALESCE(tier, 'UNKNOWN'))\nORDER BY cost_date, UPPER(COALESCE(tier, 'UNKNOWN'))",
           "refId": "A"
         }
       ],
-      "title": "Cost Trend by Sector",
+      "title": "Peak vs Pro Cost Trend (90 Days)",
       "type": "timeseries"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "sort": "desc",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0-19174562009.patch3",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT \n  UPPER(COALESCE(tier, 'UNKNOWN')) as tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY UPPER(COALESCE(tier, 'UNKNOWN'))\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Distribution by Tier",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 102,
+      "panels": [],
+      "title": "Top Applications by Peak Tier Cost",
+      "type": "row"
     },
     {
       "datasource": "Pepsico Cost Analytics",
@@ -384,104 +543,21 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 15
-      },
-      "id": 6,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.9,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "orientation": "horizontal",
-        "showValue": "always",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  sector_name as \"Sector\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY sector_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
-          "refId": "A"
-        }
-      ],
-      "title": "Top Sectors by Cost",
-      "type": "barchart"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "continuous-BlPu"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "scheme",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 15
+        "y": 18
       },
       "id": 7,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.9,
+        "barWidth": 0.85,
         "fullHighlight": false,
         "groupWidth": 0.7,
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "orientation": "horizontal",
         "showValue": "always",
@@ -498,147 +574,32 @@
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
+          "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT \n  owner_name as \"Owner\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_owner_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY owner_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
-          "refId": "A"
+          "rawQuery": true,
+          "rawSql": "SELECT \n  appd_application_name as \"Application\",\n  sector_name as \"Sector\",\n  total_cost as \"Peak Cost\",\n  total_cost * 0.33 as \"Potential Savings\"\nFROM mv_app_cost_rankings_monthly\nWHERE cost_tier = 'Peak'\n  AND month_start >= DATE_TRUNC('month', NOW() - INTERVAL '3 months')\n  AND ('$controller' = 'All' OR controller = '$controller')\nORDER BY total_cost DESC\nLIMIT 10",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
         }
       ],
-      "title": "Top Owners by Cost",
+      "title": "Top 10 Applications by Peak Tier Cost",
       "type": "barchart"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 25
-      },
-      "id": 8,
-      "options": {
-        "displayLabels": [
-          "name",
-          "percent"
-        ],
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "sort": "desc",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  capability_code as capability,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_usage_by_capability dv\nJOIN (\n  SELECT DISTINCT capability_code, controller, tier, SUM(total_cost) as total_cost\n  FROM (\n    SELECT \n      duv.capability_code,\n      dc.controller,\n      dc.tier,\n      dc.total_cost\n    FROM mv_daily_usage_by_capability duv\n    JOIN mv_daily_cost_by_controller dc \n      ON duv.usage_date = dc.cost_date \n      AND duv.controller = dc.controller \n      AND duv.tier = dc.tier\n    WHERE duv.usage_date >= NOW() - INTERVAL '90 days'\n      AND ('${controller}' = 'All' OR duv.controller = '${controller}')\n  ) sub\n  GROUP BY capability_code, controller, tier\n) cost ON dv.capability_code = cost.capability_code\nWHERE dv.usage_date >= NOW() - INTERVAL '90 days'\nGROUP BY dv.capability_code\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
-          "refId": "A"
-        }
-      ],
-      "title": "Cost by License Type",
-      "type": "piechart"
-    },
-    {
-      "datasource": "Pepsico Cost Analytics",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 25
-      },
-      "id": 9,
-      "options": {
-        "displayLabels": [
-          "name",
-          "percent"
-        ],
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "sort": "desc",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.0-19174562009.patch3",
-      "targets": [
-        {
-          "datasource": "Pepsico Cost Analytics",
-          "format": "table",
-          "rawSql": "SELECT \n  tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
-          "refId": "A"
-        }
-      ],
-      "title": "Cost by Tier (Peak vs Pro)",
-      "type": "piechart"
     }
   ],
   "preload": false,
@@ -647,7 +608,9 @@
   "tags": [
     "pepsico",
     "appdynamics",
-    "cost"
+    "peak",
+    "pro",
+    "optimization"
   ],
   "templating": {
     "list": [
@@ -656,10 +619,7 @@
           "text": "All",
           "value": "All"
         },
-        "datasource": {
-          "type": "postgres",
-          "uid": "Pepsico Cost Analytics"
-        },
+        "datasource": "Pepsico Cost Analytics",
         "definition": "SELECT 'All' as controller\nUNION\nSELECT DISTINCT appd_controller\nFROM applications_dim\nWHERE appd_controller IS NOT NULL\nORDER BY controller",
         "includeAll": false,
         "label": "Controller",
@@ -678,7 +638,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Cost Analytics (Enhanced) - v3",
-  "uid": "cost-analytics-enhanced-v3",
+  "title": "Peak vs Pro Analysis (Enhanced) - v3",
+  "uid": "peak-pro-enhanced-v3",
   "version": 0
 }

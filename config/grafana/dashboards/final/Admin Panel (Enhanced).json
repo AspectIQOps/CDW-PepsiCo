@@ -41,25 +41,9 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "failed": {
-                  "color": "red",
-                  "index": 1
-                },
-                "partial": {
-                  "color": "orange",
-                  "index": 2
-                },
-                "success": {
-                  "color": "green",
-                  "index": 0
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -69,14 +53,15 @@
               },
               {
                 "color": "orange",
-                "value": 0.5
+                "value": 70
               },
               {
                 "color": "green",
-                "value": 1
+                "value": 90
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -109,7 +94,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT CASE WHEN COUNT(*) = 0 THEN 'no data' WHEN COUNT(*) FILTER (WHERE status = 'success') = COUNT(*) THEN 'success' WHEN COUNT(*) FILTER (WHERE status = 'failed') > 0 THEN 'failed' ELSE 'partial' END as \"ETL Status\" FROM etl_execution_log WHERE started_at >= NOW() - INTERVAL '7 days'",
+          "rawSql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'success') / NULLIF(COUNT(*), 0), 1) as \"ETL Success %\" FROM etl_execution_log WHERE started_at >= NOW() - INTERVAL '7 days'",
           "refId": "A"
         }
       ],
@@ -466,7 +451,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT DATE_TRUNC('day', started_at) as time, status as metric, COUNT(*) as value FROM etl_execution_log WHERE started_at >= $__timeFrom()::timestamp AND started_at <= $__timeTo()::timestamp GROUP BY DATE_TRUNC('day', started_at), status ORDER BY time, status",
+          "rawSql": "SELECT started_at AS time, status as metric, 1 as value FROM etl_execution_log WHERE started_at >= $__timeFrom()::timestamp AND started_at <= $__timeTo()::timestamp ORDER BY time",
           "refId": "A",
           "sql": {
             "columns": [
