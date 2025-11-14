@@ -87,8 +87,8 @@ export APPD_ACCOUNT=$(aws ssm get-parameter \
     --query 'Parameter.Value' \
     --output text 2>/dev/null || echo "")
 
-export APPD_CLIENT_NAME=$(aws ssm get-parameter \
-    --name "${SSM_PREFIX}/appdynamics/CLIENT_NAME" \
+export APPD_CLIENT_ID=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/CLIENT_ID" \
     --region ${AWS_REGION} \
     --query 'Parameter.Value' \
     --output text 2>/dev/null || echo "")
