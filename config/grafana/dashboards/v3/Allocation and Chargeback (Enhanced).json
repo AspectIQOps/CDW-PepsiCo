@@ -1,0 +1,1046 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 0,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Department-Level Charges",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 100000
+              },
+              {
+                "color": "red",
+                "value": 500000
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  SUM(total_amount) as \"Total Chargeback\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "Last Month Total",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  COUNT(DISTINCT sector_name) as \"Sectors Charged\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
+          "refId": "A"
+        }
+      ],
+      "title": "Sectors Billed",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  AVG(total_amount) as \"Avg per Sector\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name != 'Unknown'",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg Cost per Sector",
+      "type": "stat"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "displayLabels": ["percent"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": ["value"]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC\nLIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Sectors by Cost",
+      "type": "piechart"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "id": 5,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.9,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  sector_name,\n  SUM(total_amount) as \"Chargeback Amount\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY \"Chargeback Amount\" DESC\nLIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 15 Sectors - Monthly Chargeback",
+      "type": "barchart"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  month_start as time,\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name IN (\n    SELECT sector_name\n    FROM mv_monthly_chargeback_summary\n    WHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n    GROUP BY sector_name\n    ORDER BY SUM(total_amount) DESC\n    LIMIT 5\n  )\nGROUP BY month_start, sector_name\nORDER BY month_start, sector_name",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 5 Sectors - 12-Month Trend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 101,
+      "panels": [],
+      "title": "Application-Level Drill-Through",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 7,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.9,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  a.appd_application_name,\n  SUM(c.usd_amount) as \"Cost\"\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE c.month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  AND ('$sector' = 'All' OR EXISTS (\n    SELECT 1 FROM sectors_dim s\n    WHERE s.sector_id = c.sector_id\n    AND s.sector_name = '$sector'\n  ))\nGROUP BY a.appd_application_name\nORDER BY \"Cost\" DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 20 Applications by Cost (Filtered by Sector)",
+      "type": "barchart"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 8,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": ["value"]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  sector_name as metric,\n  SUM(app_count) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY sector_name\nORDER BY value DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Count by Sector",
+      "type": "piechart"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  month_start as time,\n  'Total Chargeback' as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY month_start\nORDER BY month_start",
+          "refId": "A"
+        }
+      ],
+      "title": "24-Month Chargeback Trend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 102,
+      "panels": [],
+      "title": "H-Code Analysis",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "Unknown": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "Not Configured"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
+      "id": 10,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  COUNT(CASE WHEN h_code IS NOT NULL AND h_code != 'Unknown' THEN 1 END)::float / NULLIF(COUNT(*), 0) as \"H-Code Coverage\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "refId": "A"
+        }
+      ],
+      "title": "H-Code Coverage",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 18,
+        "x": 6,
+        "y": 32
+      },
+      "id": 11,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": ["value", "percent"]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY value DESC\nLIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Distribution by H-Code",
+      "type": "piechart"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 12,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.9,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  COALESCE(h_code, 'Not Configured') as h_code,\n  SUM(total_amount) as \"Cost\"\nFROM mv_monthly_chargeback_summary\nWHERE month_start = DATE_TRUNC('month', NOW() - INTERVAL '1 month')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY h_code\nORDER BY \"Cost\" DESC\nLIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 20 H-Codes by Cost",
+      "type": "barchart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Shared Service Allocations",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "percent"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  month_start as time,\n  CASE\n    WHEN chargeback_cycle = 'direct' THEN 'Direct Costs'\n    WHEN chargeback_cycle = 'shared' THEN 'Shared Services'\n    ELSE 'Other Allocations'\n  END as metric,\n  SUM(usd_amount) as value\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE month_start >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY month_start, chargeback_cycle\nORDER BY month_start",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Allocation Breakdown (Direct vs Shared)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["v3", "chargeback", "allocation", "h-code"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": "Pepsico Cost Analytics",
+        "definition": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Controller",
+        "multi": false,
+        "name": "controller",
+        "options": [],
+        "query": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": "Pepsico Cost Analytics",
+        "definition": "SELECT DISTINCT sector_name FROM sectors_dim ORDER BY sector_name",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Sector",
+        "multi": false,
+        "name": "sector",
+        "options": [],
+        "query": "SELECT DISTINCT sector_name FROM sectors_dim ORDER BY sector_name",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-12M",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Allocation and Chargeback (Enhanced)",
+  "uid": "allocation-chargeback-v3",
+  "version": 1,
+  "weekStart": ""
+}

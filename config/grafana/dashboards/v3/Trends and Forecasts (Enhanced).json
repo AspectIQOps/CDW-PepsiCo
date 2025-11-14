@@ -1,0 +1,990 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 0,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [],
+      "title": "24-Month Historical View",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  cost_date as time,\n  SUM(total_cost) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date\nORDER BY cost_date",
+          "refId": "A"
+        }
+      ],
+      "title": "24-Month Cost Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  cost_date as time,\n  sector_name as metric,\n  SUM(total_cost) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost Trend by Sector (24 Months)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  usage_date as time,\n  capability_code as metric,\n  SUM(total_units) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
+          "refId": "A"
+        }
+      ],
+      "title": "Usage Trend by License Type (24 Months)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 101,
+      "panels": [],
+      "title": "Multi-Scenario Forecasts",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineStyle": {
+              "dash": [10, 10],
+              "fill": "dash"
+            },
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actual Cost"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "solid"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "-- Actual historical costs\nSELECT\n  cost_date as time,\n  'Actual Cost' as metric,\n  SUM(total_cost) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '6 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY cost_date\n\nUNION ALL\n\n-- Linear forecast\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Linear Forecast' as metric,\n  SUM(projected_cost) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start > NOW()\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "12-Month Cost Forecast (Linear Model)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Forecast Method"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected Cost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Low Estimate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "High Estimate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "SELECT\n  TO_CHAR(month_start, 'YYYY-MM') as \"Month\",\n  method as \"Forecast Method\",\n  SUM(projected_cost) as \"Projected Cost\",\n  SUM(confidence_interval_low) as \"Low Estimate\",\n  SUM(confidence_interval_high) as \"High Estimate\"\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '12 months'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY month_start, method\nORDER BY month_start, method",
+          "refId": "A"
+        }
+      ],
+      "title": "Forecast Summary by Method (Next 12 Months)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 102,
+      "panels": [],
+      "title": "Confidence Bands & Seasonal Patterns",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Low Estimate"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [5, 10],
+                  "fill": "dash"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "High Estimate"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [5, 10],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "SELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Projected Cost' as metric,\n  SUM(projected_cost) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nUNION ALL\n\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'Low Estimate' as metric,\n  SUM(confidence_interval_low) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nUNION ALL\n\nSELECT\n  DATE_TRUNC('month', month_start) as time,\n  'High Estimate' as metric,\n  SUM(confidence_interval_high) as value\nFROM forecast_fact ff\nJOIN applications_dim a ON ff.app_id = a.app_id\nWHERE month_start BETWEEN NOW() AND NOW() + INTERVAL '18 months'\n  AND method = 'linear'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY DATE_TRUNC('month', month_start)\n\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "18-Month Forecast with Confidence Bands",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "WITH monthly_costs AS (\n  SELECT\n    DATE_TRUNC('month', cost_date) as month,\n    EXTRACT(MONTH FROM cost_date) as month_num,\n    SUM(total_cost) as monthly_total\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '24 months'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY DATE_TRUNC('month', cost_date), EXTRACT(MONTH FROM cost_date)\n)\nSELECT\n  month as time,\n  TO_CHAR(month, 'Month') as metric,\n  AVG(monthly_total) OVER (PARTITION BY month_num) as value\nFROM monthly_costs\nGROUP BY month, month_num, monthly_total\nORDER BY month",
+          "refId": "A"
+        }
+      ],
+      "title": "Seasonal Pattern Analysis (Monthly Averages)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Capacity Planning",
+      "type": "row"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+                },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Current Usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Projected Usage (12mo)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Growth Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 8,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "table",
+          "rawSql": "WITH current_usage AS (\n  SELECT\n    capability_code as license_type,\n    SUM(total_units) as current_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= NOW() - INTERVAL '30 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY capability_code\n),\nforecast_usage AS (\n  SELECT\n    c.capability_code,\n    SUM(ff.projected_units) as forecast_units\n  FROM forecast_fact ff\n  JOIN applications_dim a ON ff.app_id = a.app_id\n  JOIN capabilities_dim c ON ff.capability_id = c.capability_id\n  WHERE month_start = DATE_TRUNC('month', NOW() + INTERVAL '12 months')\n    AND ('$controller' = 'All' OR a.appd_controller = '$controller')\n  GROUP BY c.capability_code\n)\nSELECT\n  cu.license_type as \"License Type\",\n  cu.current_units as \"Current Usage\",\n  COALESCE(fu.forecast_units, cu.current_units) as \"Projected Usage (12mo)\",\n  CASE \n    WHEN cu.current_units > 0 THEN\n      (COALESCE(fu.forecast_units, cu.current_units) - cu.current_units) / cu.current_units\n    ELSE 0\n  END as \"Growth Rate\"\nFROM current_usage cu\nLEFT JOIN forecast_usage fu ON cu.license_type = fu.capability_code\nORDER BY cu.current_units DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Capacity Planning by License Type",
+      "type": "table"
+    },
+    {
+      "datasource": "Pepsico Cost Analytics",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": "Pepsico Cost Analytics",
+          "format": "time_series",
+          "rawSql": "-- Historical app count\nSELECT\n  DATE_TRUNC('month', cost_date) as time,\n  'Historical Apps' as metric,\n  COUNT(DISTINCT app_count) as value\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY DATE_TRUNC('month', cost_date)\n\nUNION ALL\n\n-- Projected app count (assume 5% monthly growth)\nSELECT\n  generate_series(\n    DATE_TRUNC('month', NOW()),\n    DATE_TRUNC('month', NOW() + INTERVAL '12 months'),\n    '1 month'::interval\n  ) as time,\n  'Projected Apps' as metric,\n  (\n    SELECT COUNT(DISTINCT app_count)\n    FROM mv_daily_cost_by_controller\n    WHERE cost_date >= NOW() - INTERVAL '30 days'\n      AND ('$controller' = 'All' OR controller = '$controller')\n  ) * POWER(1.05, EXTRACT(MONTH FROM age(generate_series, NOW()))) as value\nFROM generate_series(\n  DATE_TRUNC('month', NOW()),\n  DATE_TRUNC('month', NOW() + INTERVAL '12 months'),\n  '1 month'::interval\n)\n\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Count Projection",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["v3", "trends", "forecasts", "capacity-planning"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": "Pepsico Cost Analytics",
+        "definition": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Controller",
+        "multi": false,
+        "name": "controller",
+        "options": [],
+        "query": "SELECT DISTINCT appd_controller FROM applications_dim WHERE appd_controller IS NOT NULL ORDER BY appd_controller",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24M",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Trends and Forecasts (Enhanced)",
+  "uid": "trends-forecasts-v3",
+  "version": 1,
+  "weekStart": ""
+}

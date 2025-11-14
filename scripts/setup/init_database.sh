@@ -60,34 +60,60 @@ else
 fi
 echo ""
 
-# Check if SQL file exists
-SQL_FILE="sql/init/00_complete_init.sql"
+# Check if SQL files exist
+SQL_FILE_00="sql/init/00_complete_init.sql"
+SQL_FILE_01="sql/init/01_performance_views.sql"
 
-if [ ! -f "$SQL_FILE" ]; then
-    echo "❌ Error: SQL initialization file not found"
-    echo "   Expected: ~/CDW-PepsiCo/$SQL_FILE"
-    echo ""
-    echo "Please ensure the SQL file exists before running this script."
+if [ ! -f "$SQL_FILE_00" ]; then
+    echo "❌ Error: Base initialization file not found"
+    echo "   Expected: ~/CDW-PepsiCo/$SQL_FILE_00"
     exit 1
 fi
 
-# Run complete initialization
-echo "🗂️  Running complete database initialization..."
-echo "   File: $SQL_FILE"
+if [ ! -f "$SQL_FILE_01" ]; then
+    echo "❌ Error: Performance views file not found"
+    echo "   Expected: ~/CDW-PepsiCo/$SQL_FILE_01"
+    exit 1
+fi
+
+# Run base initialization
+echo "🗂️  [Step 1/2] Running base database initialization..."
+echo "   File: $SQL_FILE_00"
 echo ""
 
 DB_PASSWORD="$DB_PASSWORD" GRAFANA_DB_PASSWORD="$GRAFANA_DB_PASSWORD" \
-envsubst < "$SQL_FILE" | psql $PSQL_OPTS
+envsubst < "$SQL_FILE_00" | psql $PSQL_OPTS
 
 echo ""
+echo "   ✅ Base schema initialized"
+echo ""
 
-# Verify installation
+# Switch to etl_analytics user for materialized views
+echo "🚀 [Step 2/2] Creating materialized views (performance optimization)..."
+echo "   File: $SQL_FILE_01"
+echo ""
+
+export PGPASSWORD="$DB_PASSWORD"
+PSQL_OPTS_ETL="-h $RDS_ENDPOINT -U etl_analytics -d cost_analytics_db -v ON_ERROR_STOP=1"
+
+psql $PSQL_OPTS_ETL -f "$SQL_FILE_01"
+
+echo ""
+echo "   ✅ Materialized views created (8)"
+echo ""
+
+# Verify installation (switch back to postgres user)
+export PGPASSWORD="$POSTGRES_MASTER_PASSWORD"
 echo "🔍 Verifying installation..."
 echo ""
 
 # Count tables
 TABLE_COUNT=$(psql $PSQL_OPTS -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';")
 echo "   ✅ Tables created: $TABLE_COUNT"
+
+# Count materialized views
+VIEW_COUNT=$(psql $PSQL_OPTS -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='MATERIALIZED VIEW';")
+echo "   ✅ Materialized views created: $VIEW_COUNT"
 
 # Count users
 USER_COUNT=$(psql $PSQL_OPTS -tAc "SELECT COUNT(*) FROM pg_user WHERE usename IN ('etl_analytics', 'grafana_ro');")
@@ -101,6 +127,10 @@ CAPS_COUNT=$(psql $PSQL_OPTS -tAc "SELECT COUNT(*) FROM capabilities_dim;" 2>/de
 echo "   ✅ Sectors seeded: $SECTORS_COUNT"
 echo "   ✅ Capabilities seeded: $CAPS_COUNT"
 echo "   ✅ Applications: $APPS_COUNT (will be populated by ETL)"
+
+# Check indexes
+INDEX_COUNT=$(psql $PSQL_OPTS -tAc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public';")
+echo "   ✅ Indexes created: $INDEX_COUNT"
 
 echo ""
 echo "=========================================="

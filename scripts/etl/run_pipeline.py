@@ -243,7 +243,18 @@ def main():
             'max_retries': 1,
             'reason': 'Distributes shared service costs'
         })
-    
+
+    # Final step: Refresh materialized views for dashboard performance
+    if os.path.exists('/app/scripts/etl/refresh_views.py'):
+        pipeline_steps.append({
+            'script': 'refresh_views.py',
+            'description': 'Final: Refresh Materialized Views',
+            'timeout': 300,
+            'critical': False,
+            'max_retries': 1,
+            'reason': 'Updates pre-aggregated views for dashboard performance (<5s response)'
+        })
+
     # Track results
     results = []
     
