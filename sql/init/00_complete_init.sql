@@ -486,8 +486,55 @@ INSERT INTO price_config (capability_id, tier, unit_rate, start_date) VALUES
 ON CONFLICT (capability_id, tier, start_date) DO NOTHING;
 
 -- ========================================
--- 10. GRANT PERMISSIONS
+-- 10. GRANT PERMISSIONS AND OWNERSHIP
 -- ========================================
+
+-- Transfer ownership of all tables to etl_analytics
+ALTER TABLE tool_configurations OWNER TO etl_analytics;
+ALTER TABLE audit_etl_runs OWNER TO etl_analytics;
+ALTER TABLE owners_dim OWNER TO etl_analytics;
+ALTER TABLE sectors_dim OWNER TO etl_analytics;
+ALTER TABLE architecture_dim OWNER TO etl_analytics;
+ALTER TABLE capabilities_dim OWNER TO etl_analytics;
+ALTER TABLE servers_dim OWNER TO etl_analytics;
+ALTER TABLE applications_dim OWNER TO etl_analytics;
+ALTER TABLE app_server_mapping OWNER TO etl_analytics;
+ALTER TABLE price_config OWNER TO etl_analytics;
+ALTER TABLE allocation_rules OWNER TO etl_analytics;
+ALTER TABLE license_usage_fact OWNER TO etl_analytics;
+ALTER TABLE license_cost_fact OWNER TO etl_analytics;
+ALTER TABLE chargeback_fact OWNER TO etl_analytics;
+ALTER TABLE forecast_fact OWNER TO etl_analytics;
+ALTER TABLE reconciliation_log OWNER TO etl_analytics;
+ALTER TABLE etl_execution_log OWNER TO etl_analytics;
+ALTER TABLE time_dim OWNER TO etl_analytics;
+ALTER TABLE mapping_overrides OWNER TO etl_analytics;
+ALTER TABLE forecast_models OWNER TO etl_analytics;
+ALTER TABLE data_lineage OWNER TO etl_analytics;
+ALTER TABLE user_actions OWNER TO etl_analytics;
+
+-- Transfer ownership of all sequences to etl_analytics
+ALTER SEQUENCE tool_configurations_tool_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE owners_dim_owner_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE sectors_dim_sector_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE architecture_dim_architecture_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE capabilities_dim_capability_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE servers_dim_server_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE applications_dim_app_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE app_server_mapping_app_server_mapping_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE price_config_price_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE allocation_rules_rule_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE license_usage_fact_usage_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE license_cost_fact_cost_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE chargeback_fact_chargeback_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE forecast_fact_forecast_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE reconciliation_log_log_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE etl_execution_log_run_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE time_dim_time_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE mapping_overrides_override_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE forecast_models_model_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE data_lineage_lineage_id_seq OWNER TO etl_analytics;
+ALTER SEQUENCE user_actions_action_id_seq OWNER TO etl_analytics;
 
 -- ETL user gets all privileges
 GRANT ALL ON ALL TABLES IN SCHEMA public TO etl_analytics;
