@@ -200,7 +200,7 @@ def refresh_all_views():
                 missing_views.append(view_name)
 
         if missing_views:
-            print(f"⚠️  Warning: {len(missing_views)} views not found (run create_materialized_views.sql first):")
+            print(f"⚠️  Warning: {len(missing_views)} views not found (run sql/init/01_performance_views.sql first):")
             for view_name in missing_views:
                 print(f"   - {view_name}")
             print()
