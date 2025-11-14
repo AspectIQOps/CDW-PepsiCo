@@ -20,7 +20,7 @@ The composite indexes you created today need to be added to the init script for 
 -- ========================================
 
 -- Composite indexes for time-series queries (critical for dashboard performance)
-CREATE INDEX IF NOT EXISTS idx_license_usage_ts_app
+CREATE INDEX IF NOT EXISTS idx_license_usage_ts_app 
 ON license_usage_fact(ts DESC, app_id);
 
 CREATE INDEX IF NOT EXISTS idx_license_cost_ts_app

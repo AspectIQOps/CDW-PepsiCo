@@ -407,6 +407,14 @@ CREATE INDEX IF NOT EXISTS idx_lineage_time ON data_lineage(processed_at DESC);
 
 COMMENT ON TABLE data_lineage IS 'Complete audit trail tracking data flow from source systems to analytics database';
 
+-- Composite indexes for time-series queries (critical for dashboard performance)
+CREATE INDEX IF NOT EXISTS idx_license_usage_ts_app ON license_usage_fact(ts DESC, app_id);
+CREATE INDEX IF NOT EXISTS idx_license_cost_ts_app ON license_cost_fact(ts DESC, app_id);
+
+-- Update statistics
+ANALYZE license_usage_fact;
+ANALYZE license_cost_fact;
+
 -- User Actions (SoW Section 2.5.3 - Administrative changes)
 CREATE TABLE IF NOT EXISTS user_actions (
     action_id SERIAL PRIMARY KEY,
