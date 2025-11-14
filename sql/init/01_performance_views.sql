@@ -40,6 +40,8 @@ JOIN applications_dim a ON lc.app_id = a.app_id
 WHERE lc.ts >= NOW() - INTERVAL '180 days'
 GROUP BY DATE(lc.ts), a.appd_controller, lc.tier;
 
+-- Unique index required for CONCURRENT refresh (zero downtime)
+CREATE UNIQUE INDEX idx_mv_daily_cost_unique ON mv_daily_cost_by_controller(cost_date, controller, tier);
 CREATE INDEX idx_mv_daily_cost_date ON mv_daily_cost_by_controller(cost_date DESC);
 CREATE INDEX idx_mv_daily_cost_controller ON mv_daily_cost_by_controller(controller);
 CREATE INDEX idx_mv_daily_cost_tier ON mv_daily_cost_by_controller(tier);
@@ -65,6 +67,8 @@ JOIN applications_dim a ON lu.app_id = a.app_id
 WHERE lu.ts >= NOW() - INTERVAL '180 days'
 GROUP BY DATE(lu.ts), c.capability_code, c.capability_name, a.appd_controller, lu.tier;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_daily_usage_unique ON mv_daily_usage_by_capability(usage_date, capability_code, controller, tier);
 CREATE INDEX idx_mv_daily_usage_date ON mv_daily_usage_by_capability(usage_date DESC);
 CREATE INDEX idx_mv_daily_usage_capability ON mv_daily_usage_by_capability(capability_code);
 CREATE INDEX idx_mv_daily_usage_controller ON mv_daily_usage_by_capability(controller);
@@ -89,6 +93,8 @@ LEFT JOIN sectors_dim s ON a.sector_id = s.sector_id
 WHERE lc.ts >= NOW() - INTERVAL '180 days'
 GROUP BY DATE(lc.ts), s.sector_name, s.sector_id, a.appd_controller, lc.tier;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_cost_sector_unique ON mv_cost_by_sector_controller(cost_date, COALESCE(sector_id, -1), controller, tier);
 CREATE INDEX idx_mv_cost_sector_date ON mv_cost_by_sector_controller(cost_date DESC);
 CREATE INDEX idx_mv_cost_sector_name ON mv_cost_by_sector_controller(sector_name);
 CREATE INDEX idx_mv_cost_sector_controller ON mv_cost_by_sector_controller(controller);
@@ -113,6 +119,8 @@ LEFT JOIN owners_dim o ON a.owner_id = o.owner_id
 WHERE lc.ts >= NOW() - INTERVAL '180 days'
 GROUP BY DATE(lc.ts), o.owner_name, o.owner_id, a.appd_controller, lc.tier;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_cost_owner_unique ON mv_cost_by_owner_controller(cost_date, COALESCE(owner_id, -1), controller, tier);
 CREATE INDEX idx_mv_cost_owner_date ON mv_cost_by_owner_controller(cost_date DESC);
 CREATE INDEX idx_mv_cost_owner_name ON mv_cost_by_owner_controller(owner_name);
 CREATE INDEX idx_mv_cost_owner_controller ON mv_cost_by_owner_controller(controller);
@@ -157,6 +165,8 @@ WHERE lu.ts IS NOT NULL
 GROUP BY ar.pattern_name, ar.architecture_id, a.appd_controller,
          c.capability_code, c.capability_name, lc.tier;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_arch_unique ON mv_architecture_metrics_90d(COALESCE(architecture_id, -1), controller, capability_code, tier);
 CREATE INDEX idx_mv_arch_name ON mv_architecture_metrics_90d(architecture_name);
 CREATE INDEX idx_mv_arch_controller ON mv_architecture_metrics_90d(controller);
 CREATE INDEX idx_mv_arch_capability ON mv_architecture_metrics_90d(capability_code);
@@ -192,6 +202,8 @@ GROUP BY DATE_TRUNC('month', lc.ts), a.app_id, a.appd_application_name,
          a.appd_application_id, a.appd_controller, s.sector_name,
          o.owner_name, a.license_tier, lc.tier;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_app_rank_unique ON mv_app_cost_rankings_monthly(month_start, app_id, cost_tier);
 CREATE INDEX idx_mv_app_rank_month ON mv_app_cost_rankings_monthly(month_start DESC);
 CREATE INDEX idx_mv_app_rank_controller ON mv_app_cost_rankings_monthly(controller);
 CREATE INDEX idx_mv_app_rank_cost ON mv_app_cost_rankings_monthly(total_cost DESC);
@@ -217,6 +229,8 @@ LEFT JOIN sectors_dim s ON c.sector_id = s.sector_id
 WHERE c.month_start >= DATE_TRUNC('month', NOW() - INTERVAL '24 months')
 GROUP BY c.month_start, a.appd_controller, s.sector_name, s.sector_id, c.h_code;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_chargeback_unique ON mv_monthly_chargeback_summary(month_start, controller, COALESCE(sector_id, -1), h_code);
 CREATE INDEX idx_mv_chargeback_month ON mv_monthly_chargeback_summary(month_start DESC);
 CREATE INDEX idx_mv_chargeback_controller ON mv_monthly_chargeback_summary(controller);
 CREATE INDEX idx_mv_chargeback_sector ON mv_monthly_chargeback_summary(sector_name);
@@ -269,6 +283,8 @@ FULL OUTER JOIN pro_costs pr
   ON pk.cost_date = pr.cost_date
   AND pk.app_id = pr.app_id;
 
+-- Unique index required for CONCURRENT refresh
+CREATE UNIQUE INDEX idx_mv_peak_pro_unique ON mv_peak_pro_comparison(cost_date, app_id);
 CREATE INDEX idx_mv_peak_pro_date ON mv_peak_pro_comparison(cost_date DESC);
 CREATE INDEX idx_mv_peak_pro_controller ON mv_peak_pro_comparison(controller);
 CREATE INDEX idx_mv_peak_pro_savings ON mv_peak_pro_comparison(potential_savings DESC);

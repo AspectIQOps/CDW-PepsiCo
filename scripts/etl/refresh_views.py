@@ -114,10 +114,16 @@ def refresh_view_concurrently(conn, view_name):
         cursor.close()
         return True, elapsed, new_count
 
-    except psycopg2.errors.UndefinedObject as e:
-        # No unique index - fall back to regular refresh
+    except Exception as e:
+        # No unique index or other concurrent refresh error - fall back to regular refresh
         conn.rollback()
-        print(f"  ⚠️  Concurrent refresh failed (no unique index), using regular refresh...")
+
+        # Check if it's the "no unique index" error
+        error_msg = str(e)
+        if "cannot refresh materialized view" in error_msg and "concurrently" in error_msg:
+            print(f"  ⚠️  Concurrent refresh not available (no unique index), using regular refresh...")
+        else:
+            print(f"  ⚠️  Concurrent refresh failed: {error_msg}, using regular refresh...")
 
         try:
             cursor.execute(f"REFRESH MATERIALIZED VIEW {view_name}")
