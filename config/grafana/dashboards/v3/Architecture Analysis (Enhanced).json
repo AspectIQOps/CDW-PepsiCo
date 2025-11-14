@@ -180,7 +180,7 @@
           }
         ]
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -295,7 +295,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -358,7 +358,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -444,7 +444,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -673,7 +673,7 @@
           }
         ]
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -777,7 +777,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -828,7 +828,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Architecture Analysis (Enhanced)2",
-  "uid": "pepsico-architecture-analysis-enhanced2",
-  "version": 4
+  "title": "Architecture Analysis (Enhanced) - v3",
+  "uid": "architecture-analysis-enhanced-v3",
+  "version": 0
 }

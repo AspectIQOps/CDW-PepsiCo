@@ -983,8 +983,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Trends and Forecasts (Enhanced)",
-  "uid": "trends-forecasts-v3",
-  "version": 1,
+  "title": "Trends and Forecasts (Enhanced) - v3",
+  "uid": "trends-forecasts-enhanced-v3",
+  "version": 0,
   "weekStart": ""
 }

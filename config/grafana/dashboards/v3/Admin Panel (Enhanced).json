@@ -36,7 +36,7 @@
   "time": {"from": "now-7d", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
-  "title": "PepsiCo AppDynamics - Admin Panel (Enhanced)",
-  "uid": "pepsico-admin-panel-enhanced",
-  "version": 1
+  "title": "Admin Panel (Enhanced) - v3",
+  "uid": "admin-panel-enhanced-v3",
+  "version": 0
 }

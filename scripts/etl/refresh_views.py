@@ -206,7 +206,8 @@ def refresh_all_views():
             print()
 
         if not existing_views:
-            print("❌ No materialized views found. Run sql/migrations/create_materialized_views.sql first.")
+            print("❌ No materialized views found. Run sql/init/01_performance_views.sql first.")
+            print("   Or re-run scripts/setup/init_database.sh which includes view creation.")
             sys.exit(1)
 
         print(f"📋 Refreshing {len(existing_views)} materialized views...\n")

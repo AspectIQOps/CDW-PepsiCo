@@ -1039,8 +1039,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Allocation and Chargeback (Enhanced)",
-  "uid": "allocation-chargeback-v3",
-  "version": 1,
+  "title": "Allocation and Chargeback (Enhanced) - v3",
+  "uid": "allocation-chargeback-enhanced-v3",
+  "version": 0,
   "weekStart": ""
 }
