@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """
 ETL Pipeline Orchestrator - Production Grade (3-Phase Architecture)
-Optimized order: AppD Extract → ServiceNow Enrich → AppD Finalize
+Updated to include chargeback_calculation.py for proper dashboard data
 
 ARCHITECTURE:
 Phase 1: appd_extract.py     - Core AppD data (apps, usage, costs)
 Phase 2: snow_enrichment.py  - Targeted CMDB lookups (only for AppD apps)
-Phase 3: appd_finalize.py    - Chargeback, forecasting, allocation
-
-BENEFITS:
-✅ Single pipeline run (no "run again" message)
-✅ Minimal ServiceNow API calls (~128 apps vs 19K)
-✅ No wasted data transfer
-✅ Production-ready efficiency
+Phase 3: appd_finalize.py    - Cost calculations and finalization
+Phase 4: chargeback_calculation.py - Monthly chargeback aggregation ← NEW
+Phase 5: allocation_engine.py - Shared service distribution
+Phase 6: advanced_forecasting.py - Forecasting (optional)
+Phase 7: refresh_views.py    - Dashboard materialized views
 """
 import sys
 import os
@@ -162,8 +160,8 @@ def validate_credentials():
     return True, has_servicenow, has_appdynamics
 
 def main():
-    """Main pipeline orchestration - 3-phase architecture"""
-    log_step("Starting ETL Pipeline (Optimized 3-Phase)", Colors.BLUE)
+    """Main pipeline orchestration - includes chargeback calculation"""
+    log_step("Starting ETL Pipeline (Production-Ready)", Colors.BLUE)
     
     # Validate credentials before starting
     creds_valid, has_servicenow, has_appdynamics = validate_credentials()
@@ -182,7 +180,7 @@ def main():
 
     print()
 
-    # Define pipeline steps (3-phase architecture)
+    # Define pipeline steps (updated with chargeback_calculation.py)
     pipeline_steps = [
         # Phase 1: Extract core AppD data (apps, usage, costs)
         {
@@ -209,48 +207,55 @@ def main():
         print(f"{Colors.YELLOW}⊘ Skipping Phase 2: ServiceNow (credentials not configured){Colors.NC}")
         print(f"{Colors.YELLOW}   Pipeline will continue without CMDB enrichment{Colors.NC}\n")
     
-    # Phase 3: Finalize (chargeback, forecasting, allocation)
+    # Phase 3: Finalize (cost calculations)
     pipeline_steps.append({
         'script': 'appd_finalize.py',
-        'description': 'Phase 3: Analytics & Chargeback Finalization',
+        'description': 'Phase 3: Cost Calculations & Finalization',
         'timeout': 300,
-        'critical': False,  # Not critical - analytics/forecasting
+        'critical': True,  # Critical - needed for chargeback
         'max_retries': 1,
-        'reason': 'Generates chargeback, forecasts, and allocations'
+        'reason': 'Calculates license costs from usage data'
     })
     
-    # Optional: Reconciliation (if ServiceNow was used)
-    # Not needed in new architecture - enrichment does direct matching
+    # Phase 4: Chargeback calculation (NEW - aggregates costs by month/sector/h-code)
+    pipeline_steps.append({
+        'script': 'chargeback_calculation.py',
+        'description': 'Phase 4: Monthly Chargeback Aggregation',
+        'timeout': 300,
+        'critical': True,  # Critical for dashboard data
+        'max_retries': 1,
+        'reason': 'Aggregates costs into monthly chargeback records for dashboard'
+    })
     
-    # Optional: Advanced forecasting (if available)
+    # Phase 5: Cost allocation (distributes shared service costs)
+    if has_servicenow:
+        pipeline_steps.append({
+            'script': 'allocation_engine.py',
+            'description': 'Phase 5: Shared Service Cost Allocation',
+            'timeout': 300,
+            'critical': False,  # Not critical - only for shared services
+            'max_retries': 1,
+            'reason': 'Distributes shared service costs across sectors'
+        })
+    
+    # Phase 6: Advanced forecasting (optional)
     if os.path.exists('/app/scripts/etl/advanced_forecasting.py'):
         pipeline_steps.append({
             'script': 'advanced_forecasting.py',
-            'description': 'Optional: Advanced Forecasting',
+            'description': 'Phase 6: Advanced Forecasting',
             'timeout': 300,
             'critical': False,
             'max_retries': 1,
             'reason': 'Enhanced forecasting with multiple algorithms'
         })
-    
-    # Optional: Cost allocation (if available)
-    if os.path.exists('/app/scripts/etl/allocation_engine.py') and has_servicenow:
-        pipeline_steps.append({
-            'script': 'allocation_engine.py',
-            'description': 'Optional: Cost Allocation Engine',
-            'timeout': 300,
-            'critical': False,
-            'max_retries': 1,
-            'reason': 'Distributes shared service costs'
-        })
 
-    # Final step: Refresh materialized views for dashboard performance
+    # Phase 7: Refresh materialized views for dashboard performance
     if os.path.exists('/app/scripts/etl/refresh_views.py'):
         pipeline_steps.append({
             'script': 'refresh_views.py',
-            'description': 'Final: Refresh Materialized Views',
+            'description': 'Phase 7: Refresh Dashboard Views',
             'timeout': 300,
-            'critical': False,
+            'critical': False,  # Not critical but important
             'max_retries': 1,
             'reason': 'Updates pre-aggregated views for dashboard performance (<5s response)'
         })
@@ -329,7 +334,11 @@ def main():
         print(f"  Phase 2: ServiceNow Enrich → {Colors.GREEN}✅{Colors.NC}")
     else:
         print(f"  Phase 2: ServiceNow Enrich → {Colors.YELLOW}⊘ Skipped{Colors.NC}")
-    print(f"  Phase 3: AppD Finalize → {Colors.GREEN}✅{Colors.NC}")
+    print(f"  Phase 3: Cost Calculation → {Colors.GREEN}✅{Colors.NC}")
+    print(f"  Phase 4: Chargeback Aggregation → {Colors.GREEN}✅{Colors.NC} ← NEW")
+    print(f"  Phase 5: Allocation → {Colors.GREEN}✅{Colors.NC}")
+    print(f"  Phase 6: Forecasting → {Colors.GREEN}✅{Colors.NC}")
+    print(f"  Phase 7: Refresh Views → {Colors.GREEN}✅{Colors.NC}")
     print()
     
     # Exit with appropriate code
