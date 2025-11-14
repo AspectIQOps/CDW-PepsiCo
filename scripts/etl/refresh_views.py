@@ -62,10 +62,9 @@ def check_view_exists(conn, view_name):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT COUNT(*)
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name = %s
-          AND table_type = 'MATERIALIZED VIEW'
+        FROM pg_matviews
+        WHERE schemaname = 'public'
+          AND matviewname = %s
     """, (view_name,))
     exists = cursor.fetchone()[0] > 0
     cursor.close()
