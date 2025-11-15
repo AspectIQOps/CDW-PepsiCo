@@ -271,9 +271,25 @@ def populate_usage_and_costs(conn):
     print("💰 Populating Usage and Cost Data (6 months)...")
     cursor = conn.cursor()
 
-    # Get all applications
-    cursor.execute("SELECT app_id FROM applications_dim")
+    # Only get applications that don't have recent usage data (last 7 days)
+    cursor.execute("""
+        SELECT a.app_id
+        FROM applications_dim a
+        WHERE NOT EXISTS (
+            SELECT 1 FROM license_usage_fact luf
+            WHERE luf.app_id = a.app_id
+            AND luf.ts >= CURRENT_DATE - INTERVAL '7 days'
+        )
+        LIMIT 60
+    """)
     apps = [row[0] for row in cursor.fetchall()]
+
+    if not apps:
+        print("   ℹ️  All applications already have recent usage data. Skipping...")
+        cursor.close()
+        return
+
+    print(f"   Found {len(apps)} applications needing usage data...")
 
     # Get capability IDs
     cursor.execute("SELECT capability_id, capability_code FROM capabilities_dim")
@@ -288,21 +304,23 @@ def populate_usage_and_costs(conn):
     # Map (capability_id, tier) -> (price_id, unit_rate)
     prices = {(row[1], row[2]): (row[0], row[3]) for row in cursor.fetchall()}
 
-    # Generate data for last 6 months (daily)
+    # Generate data for last 90 days (reduced from 180 for faster demo population)
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=180)
+    start_date = end_date - timedelta(days=90)
 
     usage_records = 0
     cost_records = 0
+    apps_processed = 0
 
     # Batch inserts
     usage_batch = []
     cost_batch = []
-    BATCH_SIZE = 5000
+    BATCH_SIZE = 10000  # Increased for better performance
 
-    print("   Generating daily data points...")
+    print(f"   Generating 90 days of data for {len(apps)} apps...")
 
     for app_id in apps:
+        apps_processed += 1
         # Each app uses 1-3 capabilities
         app_capabilities = random.sample(capabilities, random.randint(1, 3))
 
@@ -361,7 +379,7 @@ def populate_usage_and_costs(conn):
                     cost_batch = []
 
                     conn.commit()
-                    print(f"      {usage_records:,} usage records, {cost_records:,} cost records...")
+                    print(f"      Apps: {apps_processed}/{len(apps)} | Records: {usage_records:,} usage, {cost_records:,} cost")
 
             current_date += timedelta(days=1)
 
@@ -383,7 +401,8 @@ def populate_usage_and_costs(conn):
     conn.commit()
     print(f"   ✓ Created {usage_records:,} usage records")
     print(f"   ✓ Created {cost_records:,} cost records")
-    print(f"   ✓ Date range: {start_date.date()} to {end_date.date()}")
+    print(f"   ✓ Date range: {start_date.date()} to {end_date.date()} (90 days)")
+    print(f"   ✓ Processed {apps_processed} applications")
     cursor.close()
     print()
 

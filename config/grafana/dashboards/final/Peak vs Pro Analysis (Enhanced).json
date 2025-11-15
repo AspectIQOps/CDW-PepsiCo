@@ -92,7 +92,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Peak Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Peak Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -153,7 +153,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Pro Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Pro Tier Cost\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -218,7 +218,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) * 0.33, 0) as \"Potential Savings\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) * 0.33, 0) as \"Potential Savings\"\nFROM mv_daily_cost_by_controller\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -276,7 +276,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "WITH tier_costs AS (\n  SELECT \n    SUM(CASE WHEN UPPER(COALESCE(tier, '')) = 'PEAK' THEN total_cost ELSE 0 END) as peak_cost,\n    SUM(total_cost) as total_cost\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= NOW() - INTERVAL '90 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n)\nSELECT \n  CASE WHEN total_cost = 0 THEN 0\n  ELSE (peak_cost / NULLIF(total_cost, 0)) * 100 END as \"Peak %\"\nFROM tier_costs",
+          "rawSql": "WITH tier_costs AS (\n  SELECT \n    SUM(CASE WHEN UPPER(COALESCE(tier, '')) = 'PEAK' THEN total_cost ELSE 0 END) as peak_cost,\n    SUM(total_cost) as total_cost\n  FROM mv_daily_cost_by_controller\n  WHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n    AND ('$controller' = 'All' OR controller = '$controller')\n)\nSELECT \n  CASE WHEN total_cost = 0 THEN 0\n  ELSE (peak_cost / NULLIF(total_cost, 0)) * 100 END as \"Peak %\"\nFROM tier_costs",
           "refId": "A"
         }
       ],
@@ -479,7 +479,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  UPPER(COALESCE(tier, 'UNKNOWN')) as tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY UPPER(COALESCE(tier, 'UNKNOWN'))\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  UPPER(COALESCE(tier, 'UNKNOWN')) as tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY UPPER(COALESCE(tier, 'UNKNOWN'))\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],

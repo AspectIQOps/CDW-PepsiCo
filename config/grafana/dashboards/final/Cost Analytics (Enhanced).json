@@ -71,11 +71,11 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
-      "title": "90-Day Total Cost",
+      "title": " Total Cost",
       "type": "stat"
     },
     {
@@ -128,7 +128,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(AVG(total_cost), 0) as \"Avg Daily Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
+          "rawSql": "SELECT \n  COALESCE(AVG(total_cost), 0) as \"Avg Daily Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
@@ -185,7 +185,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(MAX(total_cost), 0) as \"Peak Day Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
+          "rawSql": "SELECT \n  COALESCE(MAX(total_cost), 0) as \"Peak Day Cost\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
@@ -242,7 +242,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) / NULLIF(SUM(app_count), 0), 0) as \"Avg Cost per App\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_cost) / NULLIF(SUM(app_count), 0), 0) as \"Avg Cost per App\"\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')",
           "refId": "A"
         }
       ],
@@ -333,7 +333,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  cost_date as time,\n  sector_name as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
+          "rawSql": "SELECT \n  cost_date as time,\n  sector_name as metric,\n  COALESCE(SUM(total_cost), 0) as value\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY cost_date, sector_name\nORDER BY cost_date, sector_name",
           "refId": "A"
         }
       ],
@@ -416,7 +416,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  sector_name as \"Sector\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY sector_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  sector_name as \"Sector\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_sector_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY sector_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -499,7 +499,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  owner_name as \"Owner\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_owner_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY owner_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  owner_name as \"Owner\",\n  COALESCE(SUM(total_cost), 0) as \"Total Cost\"\nFROM mv_cost_by_owner_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY owner_name\nORDER BY \"Total Cost\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
@@ -566,7 +566,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  CASE \n    WHEN tier = 'Peak' THEN 'AppDynamics'\n    WHEN tier = 'Pro' THEN 'AppDynamics Pro'\n    ELSE tier\n  END as \"License Type\",\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  CASE \n    WHEN tier = 'Peak' THEN 'AppDynamics'\n    WHEN tier = 'Pro' THEN 'AppDynamics Pro'\n    ELSE tier\n  END as \"License Type\",\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],
@@ -633,7 +633,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= NOW() - INTERVAL '90 days'\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
+          "rawSql": "SELECT \n  tier,\n  COALESCE(SUM(total_cost), 0) as total\nFROM mv_daily_cost_by_controller\nWHERE cost_date >= $__timeFrom()::date AND cost_date <= $__timeTo()::date\n  AND ('${controller}' = 'All' OR controller = '${controller}')\nGROUP BY tier\nHAVING SUM(total_cost) > 0\nORDER BY total DESC",
           "refId": "A"
         }
       ],

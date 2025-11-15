@@ -359,7 +359,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT \n  usage_date as time,\n  capability_code as metric,\n  COALESCE(SUM(total_units), 0) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
+          "rawSql": "SELECT \n  usage_date as time,\n  capability_code as metric,\n  COALESCE(SUM(total_units), 0) as value\nFROM mv_daily_usage_by_capability\nWHERE usage_date >= $__timeFrom()::date AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY usage_date, capability_code\nORDER BY usage_date, capability_code",
           "refId": "A"
         }
       ],
@@ -429,7 +429,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Peak Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Peak Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PEAK'\n  AND usage_date >= $__timeFrom()::date AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -486,7 +486,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Pro Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND usage_date >= NOW() - INTERVAL '90 days'\n  AND ('$controller' = 'All' OR controller = '$controller')",
+          "rawSql": "SELECT \n  COALESCE(SUM(total_units), 0) as \"Pro Tier Total Units\"\nFROM mv_daily_usage_by_capability\nWHERE UPPER(COALESCE(tier, '')) = 'PRO'\n  AND usage_date >= $__timeFrom()::date AND usage_date <= $__timeTo()::date\n  AND ('$controller' = 'All' OR controller = '$controller')",
           "refId": "A"
         }
       ],
@@ -583,7 +583,7 @@
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "table",
-          "rawSql": "SELECT \n  app_name as \"Application\",\n  SUM(total_units) as \"Total Units\"\nFROM (\n  SELECT \n    (SELECT appd_application_name FROM applications_dim WHERE app_id IN (\n      SELECT DISTINCT app_id FROM license_usage_fact \n      WHERE ts >= NOW() - INTERVAL '90 days'\n      LIMIT 1\n    )) as app_name,\n    SUM(total_units) as total_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= NOW() - INTERVAL '90 days'\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY controller\n) sub\nWHERE app_name IS NOT NULL\nGROUP BY app_name\nHAVING SUM(total_units) > 0\nORDER BY \"Total Units\" DESC\nLIMIT 10",
+          "rawSql": "SELECT \n  app_name as \"Application\",\n  SUM(total_units) as \"Total Units\"\nFROM (\n  SELECT \n    (SELECT appd_application_name FROM applications_dim WHERE app_id IN (\n      SELECT DISTINCT app_id FROM license_usage_fact \n      WHERE ts >= $__timeFrom()::timestamptz AND ts <= $__timeTo()::timestamptz\n      LIMIT 1\n    )) as app_name,\n    SUM(total_units) as total_units\n  FROM mv_daily_usage_by_capability\n  WHERE usage_date >= $__timeFrom()::date AND usage_date <= $__timeTo()::date\n    AND ('$controller' = 'All' OR controller = '$controller')\n  GROUP BY controller\n) sub\nWHERE app_name IS NOT NULL\nGROUP BY app_name\nHAVING SUM(total_units) > 0\nORDER BY \"Total Units\" DESC\nLIMIT 10",
           "refId": "A"
         }
       ],
