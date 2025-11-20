@@ -417,10 +417,7 @@ docker compose -f docker-compose.ec2.yaml logs
 
 ### Local Development
 ```bash
-# Use mock data
-export USE_MOCK_DATA=true
-
-# Run locally
+# Run locally (requires AppDynamics API credentials)
 python3 scripts/etl/run_pipeline.py
 
 # Run tests

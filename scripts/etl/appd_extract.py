@@ -427,27 +427,37 @@ def fetch_license_usage(controller, account, client_id, client_secret, account_i
         }
     """
     try:
-        # Try the licensing API endpoint
+        # Convert milliseconds to ISO 8601 format for AppDynamics Licensing API v1
+        from datetime import datetime
+        date_from = datetime.fromtimestamp(start_time_ms / 1000).strftime('%Y-%m-%dT%H:%M:%SZ')
+        date_to = datetime.fromtimestamp(end_time_ms / 1000).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        # AppDynamics Licensing API v1 parameters
         params = {
-            'start-time': start_time_ms,
-            'end-time': end_time_ms,
-            'time-rollup-type': 'AVERAGE',
-            'output': 'JSON'
+            'dateFrom': date_from,
+            'dateTo': date_to,
+            'granularityMinutes': 1440  # Daily aggregation (1440 min = 24 hours)
         }
 
         usage_data = appd_api_get(
             controller, account, client_id, client_secret,
-            f"licensing/usage/account/{account_id}",
+            f"licensing/v1/usage/account/{account_id}",  # Fixed: Added /v1/ version prefix
             params=params,
             suppress_404=False
         )
 
-        print(f"✅ Fetched license usage data from AppDynamics API")
-        return usage_data if isinstance(usage_data, list) else []
+        print(f"✅ Fetched license usage data from AppDynamics API v1")
+
+        # v1 API returns a dict with 'packages' array, not a direct list
+        if isinstance(usage_data, dict):
+            return usage_data  # Return the full response dict
+        else:
+            print(f"⚠️  Unexpected API response format: {type(usage_data)}")
+            return None
 
     except Exception as e:
-        print(f"⚠️  AppDynamics Licensing API not available: {e}")
-        print(f"   Falling back to node-based estimation")
+        print(f"❌ AppDynamics Licensing API request failed: {e}")
+        print(f"   ETL will terminate - real license data is required")
         return None
 
 def generate_usage_data_from_api(conn, controller, account, client_id, client_secret, account_id, app_id_map):
@@ -489,7 +499,7 @@ def generate_usage_data_from_api(conn, controller, account, client_id, client_se
     )
 
     if usage_data is None:
-        # API not available - FAIL immediately (no fallback to estimation)
+        # API request failed - terminate ETL (real data is required)
         print("❌ CRITICAL: AppDynamics Licensing API is unavailable")
         print("   Cannot proceed without real license usage data")
         print("   Please verify:")
@@ -497,56 +507,74 @@ def generate_usage_data_from_api(conn, controller, account, client_id, client_se
         print(f"   - Controller URL is accessible: {controller}")
         print("   - OAuth credentials are valid")
         print("   - Network connectivity to AppDynamics")
-        raise Exception("AppDynamics Licensing API unavailable - cannot proceed with estimated data")
+        raise Exception("AppDynamics Licensing API unavailable - cannot proceed without real license data")
 
-    # Process API response and insert into database
+    # Process API v1 response format
+    # Response structure: { accountId, packages: [{ name, unitUsages: [{ usageType, data: [{ timestamp, used: { avg } }] }] }] }
     data = []
-    for record in usage_data:
-        appd_id = str(record.get('applicationId'))
-        db_app_id = app_id_map.get(appd_id)
 
-        if not db_app_id:
-            continue  # Skip apps not in our database
+    if not usage_data or not isinstance(usage_data, dict):
+        print("⚠️  Invalid API response format")
+        cur.close()
+        return 0
 
-        agent_type = record.get('agentType', '')
-        capability_code = agent_type_to_capability.get(agent_type)
+    packages = usage_data.get('packages', [])
+    print(f"📦 Processing {len(packages)} license packages from API...")
 
-        if not capability_code or capability_code not in caps:
-            continue  # Skip unknown agent types
+    # Map package names to tiers (AppDynamics uses package names like "APM_PRO", "APM_PEAK")
+    for package in packages:
+        package_name = package.get('name', '')
+        tier = 'Peak' if 'PEAK' in package_name.upper() else 'Pro'
 
-        # Get tier from API or from database
-        tier = record.get('tier', 'Pro')
-        units = record.get('avgUnits', 0)
-        timestamp_ms = record.get('timestamp', end_time_ms)
+        unit_usages = package.get('unitUsages', [])
+        for unit_usage in unit_usages:
+            usage_type = unit_usage.get('usageType', '')
 
-        # Convert timestamp to date
-        ts = datetime.fromtimestamp(timestamp_ms / 1000).replace(hour=0, minute=0, second=0, microsecond=0)
+            # Map usage_type to capability
+            capability_code = agent_type_to_capability.get(usage_type)
+            if not capability_code or capability_code not in caps:
+                continue  # Skip unknown agent types
 
-        data.append((
-            ts,
-            db_app_id,
-            caps[capability_code],
-            tier,
-            round(units, 2),
-            record.get('nodeCount', 0)
-        ))
+            # Process time-series data points
+            data_points = unit_usage.get('data', [])
+            for data_point in data_points:
+                timestamp_str = data_point.get('timestamp', '')
+                used_stats = data_point.get('used', {})
 
-    # Bulk insert
-    if data:
-        cur.executemany("""
-            INSERT INTO license_usage_fact
-            (ts, app_id, capability_id, tier, units_consumed, nodes_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT DO NOTHING
-        """, data)
+                # Use average units consumed
+                units = used_stats.get('avg', 0)
 
-        conn.commit()
-        print(f"✅ Inserted {len(data)} usage records from AppDynamics API")
-    else:
-        print("⚠️  No usage data returned from API")
+                if units == 0:
+                    continue  # Skip zero usage
+
+                # Parse ISO 8601 timestamp
+                try:
+                    ts = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    ts = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+                except:
+                    continue  # Skip invalid timestamps
+
+                # Since v1 API doesn't provide per-application data, we'll distribute usage across all apps
+                # This is a limitation - we'll need the grouped-usage API for app-level granularity
+                # For now, create account-level aggregated records
+                # TODO: Use grouped-usage API for per-application breakdown
+
+                # Use a synthetic app_id for account-level data (we'll create a special "All Apps" entry)
+                # For now, skip this until we implement grouped-usage API
+                # This is noted in the research doc as a next step
+
+                # NOTE: The v1/usage API provides ACCOUNT-LEVEL aggregated data,
+                # not per-application. We need /v1/grouped-usage/application APIs for app-level data.
+                print(f"⚠️  v1/usage API provides account-level data only (not per-application)")
+                print(f"   Next step: Implement /v1/grouped-usage/application API for app-level breakdown")
+                break  # Exit early since this won't work for per-app usage
+            break
+        break
 
     cur.close()
-    return len(data)
+    print("⚠️  Account-level API does not provide per-application usage breakdown")
+    print("   Need to use: /controller/licensing/v1/account/{accountId}/grouped-usage/application/by-id")
+    return 0
 
 def calculate_costs(conn):
     """

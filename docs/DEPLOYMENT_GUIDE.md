@@ -214,7 +214,7 @@ The pipeline automatically runs in this order:
    - Extracts H-code from AppD tags
    - Determines Peak vs Pro tier from API response
    - Classifies Monolith vs Microservices architecture
-   - **Note:** Falls back to node-based estimation only if Licensing API is unavailable
+   - **Note:** ETL terminates if Licensing API is unavailable - real data is required
 
 2. **Phase 2: ServiceNow Enrichment** (`snow_enrichment.py`)
    - Targeted CMDB lookups (only for AppD apps)
