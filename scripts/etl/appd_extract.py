@@ -25,6 +25,7 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 # Multi-controller support: comma-separated lists
 APPD_CONTROLLERS = os.getenv('APPD_CONTROLLERS', os.getenv('APPD_CONTROLLER', ''))
 APPD_ACCOUNTS = os.getenv('APPD_ACCOUNTS', os.getenv('APPD_ACCOUNT', ''))
+APPD_ACCOUNT_IDS = os.getenv('APPD_ACCOUNT_IDS', os.getenv('APPD_ACCOUNT_ID', ''))  # Numeric account IDs for Licensing API
 APPD_CLIENT_IDS = os.getenv('APPD_CLIENT_IDS', os.getenv('APPD_CLIENT_ID', ''))
 APPD_CLIENT_SECRETS = os.getenv('APPD_CLIENT_SECRETS', os.getenv('APPD_CLIENT_SECRET', ''))
 
@@ -368,15 +369,92 @@ def upsert_applications(conn, controller, apps, node_counts, app_tags):
     print(f"✅ Upserted {len(app_id_map)} applications from {controller}")
     return app_id_map
 
-def generate_usage_data(conn, app_id_map):
+def get_account_id(controller, account, client_id, client_secret):
     """
-    Generate usage data for applications
+    Auto-discover the numeric Account ID from AppDynamics
 
-    NOTE: AppDynamics license usage API requires specific account ID format.
-    For MVP, we'll generate usage based on node counts and tier data.
-    In production, integrate with actual license usage API when endpoint is confirmed.
+    This can be used if the customer doesn't know their Account ID.
+    Calls: GET /controller/api/accounts/myaccount
+
+    Returns:
+        str: Numeric account ID
     """
-    print("📊 Generating usage data from application metadata...")
+    try:
+        response = appd_api_get(
+            controller, account, client_id, client_secret,
+            "controller/api/accounts/myaccount",
+            suppress_404=False
+        )
+
+        if response and isinstance(response, dict):
+            account_id = str(response.get('id', ''))
+            if account_id:
+                print(f"✅ Auto-discovered Account ID: {account_id}")
+                return account_id
+
+        print("⚠️  Could not auto-discover Account ID from API")
+        return None
+
+    except Exception as e:
+        print(f"⚠️  Failed to auto-discover Account ID: {e}")
+        return None
+
+def fetch_license_usage(controller, account, client_id, client_secret, account_id, start_time_ms, end_time_ms):
+    """
+    Fetch actual license usage data from AppDynamics Licensing API
+
+    API Endpoint: GET /controller/licensing/usage/account/{accountId}
+    Documentation: https://docs.appdynamics.com/latest/en/appdynamics-apis/licensing-api
+
+    Args:
+        controller: AppD controller URL
+        account: Account name
+        client_id: OAuth client ID
+        client_secret: OAuth secret
+        account_id: Account ID for licensing API
+        start_time_ms: Start time in milliseconds since epoch
+        end_time_ms: End time in milliseconds since epoch
+
+    Returns:
+        List of usage records with structure:
+        {
+            'applicationId': int,
+            'agentType': str,  # 'APM_APP_AGENT', 'MACHINE_AGENT', 'NETVIZ_AGENT', etc.
+            'tier': str,       # 'Peak' or 'Pro'
+            'avgUnits': float,
+            'maxUnits': float,
+            'timestamp': int   # milliseconds
+        }
+    """
+    try:
+        # Try the licensing API endpoint
+        params = {
+            'start-time': start_time_ms,
+            'end-time': end_time_ms,
+            'time-rollup-type': 'AVERAGE',
+            'output': 'JSON'
+        }
+
+        usage_data = appd_api_get(
+            controller, account, client_id, client_secret,
+            f"controller/licensing/usage/account/{account_id}",
+            params=params,
+            suppress_404=False
+        )
+
+        print(f"✅ Fetched license usage data from AppDynamics API")
+        return usage_data if isinstance(usage_data, list) else []
+
+    except Exception as e:
+        print(f"⚠️  AppDynamics Licensing API not available: {e}")
+        print(f"   Falling back to node-based estimation")
+        return None
+
+def generate_usage_data_from_api(conn, controller, account, client_id, client_secret, account_id, app_id_map):
+    """
+    Fetch REAL license usage data from AppDynamics Licensing API
+    """
+    print("📊 Fetching actual license usage from AppDynamics API...")
 
     cur = conn.cursor()
 
@@ -384,60 +462,76 @@ def generate_usage_data(conn, app_id_map):
     cur.execute("SELECT capability_id, capability_code FROM capabilities_dim")
     caps = {row[1]: row[0] for row in cur.fetchall()}
 
-    # Get application metadata to derive usage
+    # Capability mapping from AppD agent types
+    agent_type_to_capability = {
+        'APM_APP_AGENT': 'APM',
+        'APP_AGENT': 'APM',
+        'MACHINE_AGENT': 'INFRA',
+        'ANALYTICS_AGENT': 'ANALYTICS',
+        'BROWSER_RUM_AGENT': 'MRUM',
+        'MOBILE_RUM_AGENT': 'MRUM',
+        'SYNTHETIC_AGENT': 'Synthetic',
+        'DB_AGENT': 'DB'
+    }
+
+    # Fetch last 12 months of usage (per SOW requirement)
+    now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = now - timedelta(days=365)
+
+    # Convert to milliseconds for AppD API
+    start_time_ms = int(start_date.timestamp() * 1000)
+    end_time_ms = int(now.timestamp() * 1000)
+
+    # Fetch usage from AppD API
+    usage_data = fetch_license_usage(
+        controller, account, client_id, client_secret,
+        account_id, start_time_ms, end_time_ms
+    )
+
+    if usage_data is None:
+        # API not available - FAIL immediately (no fallback to estimation)
+        print("❌ CRITICAL: AppDynamics Licensing API is unavailable")
+        print("   Cannot proceed without real license usage data")
+        print("   Please verify:")
+        print(f"   - Account ID is correct: {account_id}")
+        print(f"   - Controller URL is accessible: {controller}")
+        print("   - OAuth credentials are valid")
+        print("   - Network connectivity to AppDynamics")
+        raise Exception("AppDynamics Licensing API unavailable - cannot proceed with estimated data")
+
+    # Process API response and insert into database
     data = []
-    now = datetime.now()
-    start_date = now - timedelta(days=90)
+    for record in usage_data:
+        appd_id = str(record.get('applicationId'))
+        db_app_id = app_id_map.get(appd_id)
 
-    for appd_id, db_app_id in app_id_map.items():
-        # Get app metadata
-        cur.execute(
-            "SELECT metadata, license_tier FROM applications_dim WHERE app_id = %s",
-            (db_app_id,)
-        )
-        row = cur.fetchone()
-        if not row:
-            continue
+        if not db_app_id:
+            continue  # Skip apps not in our database
 
-        metadata, license_tier = row
-        node_count = metadata.get('node_count', 1) if metadata else 1
-        tier_count = metadata.get('tier_count', 1) if metadata else 1
+        agent_type = record.get('agentType', '')
+        capability_code = agent_type_to_capability.get(agent_type)
 
-        # Generate daily usage records for last 90 days
-        # Usage is based on node count (each node consumes units)
-        current = start_date
-        while current <= now:
-            # APM units: roughly node_count * 1.5 (varies by day)
-            apm_units = round(node_count * 1.5 * (0.9 + 0.2 * (current.day % 7) / 7), 2)
+        if not capability_code or capability_code not in caps:
+            continue  # Skip unknown agent types
 
-            # MRUM units: roughly tier_count * 100 (web traffic)
-            mrum_units = round(tier_count * 100 * (0.8 + 0.4 * (current.day % 7) / 7), 2)
+        # Get tier from API or from database
+        tier = record.get('tier', 'Pro')
+        units = record.get('avgUnits', 0)
+        timestamp_ms = record.get('timestamp', end_time_ms)
 
-            # Insert APM usage
-            if 'APM' in caps:
-                data.append((
-                    current,
-                    db_app_id,
-                    caps['APM'],
-                    license_tier,
-                    apm_units,
-                    node_count
-                ))
+        # Convert timestamp to date
+        ts = datetime.fromtimestamp(timestamp_ms / 1000).replace(hour=0, minute=0, second=0, microsecond=0)
 
-            # Insert MRUM usage
-            if 'MRUM' in caps:
-                data.append((
-                    current,
-                    db_app_id,
-                    caps['MRUM'],
-                    license_tier,
-                    mrum_units,
-                    tier_count
-                ))
+        data.append((
+            ts,
+            db_app_id,
+            caps[capability_code],
+            tier,
+            round(units, 2),
+            record.get('nodeCount', 0)
+        ))
 
-            current += timedelta(days=1)
-
-    # Bulk insert usage records
+    # Bulk insert
     if data:
         cur.executemany("""
             INSERT INTO license_usage_fact
@@ -447,9 +541,9 @@ def generate_usage_data(conn, app_id_map):
         """, data)
 
         conn.commit()
-        print(f"✅ Inserted {len(data)} usage records")
+        print(f"✅ Inserted {len(data)} usage records from AppDynamics API")
     else:
-        print("⚠️  No usage data generated")
+        print("⚠️  No usage data returned from API")
 
     cur.close()
     return len(data)
@@ -503,18 +597,25 @@ def run_appd_extract():
     # Parse comma-separated controller configs
     controllers = [c.strip() for c in APPD_CONTROLLERS.split(',') if c.strip()]
     accounts = [a.strip() for a in APPD_ACCOUNTS.split(',') if a.strip()]
+    account_ids = [a.strip() for a in APPD_ACCOUNT_IDS.split(',') if a.strip()]
     client_ids = [c.strip() for c in APPD_CLIENT_IDS.split(',') if c.strip()]
     client_secrets = [s.strip() for s in APPD_CLIENT_SECRETS.split(',') if s.strip()]
 
-    # Validate we have matching counts
+    # Validate we have matching counts (account_ids is optional - can be auto-discovered)
     if not (len(controllers) == len(accounts) == len(client_ids) == len(client_secrets)):
         print("❌ Mismatched controller configuration counts!")
         print(f"   Controllers: {len(controllers)}, Accounts: {len(accounts)}, Client IDs: {len(client_ids)}, Secrets: {len(client_secrets)}")
         sys.exit(1)
 
+    # Account IDs can be provided or auto-discovered
+    if len(account_ids) > 0 and len(account_ids) != len(controllers):
+        print("⚠️  Warning: Account IDs count doesn't match controllers count")
+        print(f"   Controllers: {len(controllers)}, Account IDs: {len(account_ids)}")
+        print("   Will attempt to auto-discover missing Account IDs...")
+
     if len(controllers) == 0:
         print("❌ No AppDynamics controllers configured!")
-        print("   Set APPD_CONTROLLERS, APPD_ACCOUNTS, APPD_CLIENT_IDS, APPD_CLIENT_SECRETS")
+        print("   Set APPD_CONTROLLERS, APPD_ACCOUNTS, APPD_ACCOUNT_IDS, APPD_CLIENT_IDS, APPD_CLIENT_SECRETS")
         sys.exit(1)
 
     print(f"📋 Configured {len(controllers)} controller(s):")
@@ -528,6 +629,8 @@ def run_appd_extract():
     total_usage_rows = 0
     total_cost_rows = 0
     total_h_code_count = 0
+    discovered_account_ids = []  # Track discovered IDs to save to SSM
+    any_ids_discovered = False
 
     try:
         # Step 1: Connect to database
@@ -547,12 +650,27 @@ def run_appd_extract():
         # Step 3: Loop through each controller and fetch data
         for i, controller in enumerate(controllers):
             account = accounts[i]
+            account_id = account_ids[i] if i < len(account_ids) else None
             client_id = client_ids[i]
             client_secret = client_secrets[i]
 
             print(f"\n{'=' * 60}")
             print(f"Processing Controller {i+1}/{len(controllers)}: {controller}")
             print(f"{'=' * 60}\n")
+
+            # Auto-discover account ID if not provided
+            if not account_id or account_id == '':
+                print("ℹ️  APPD_ACCOUNT_ID not provided, attempting auto-discovery...")
+                account_id = get_account_id(controller, account, client_id, client_secret)
+                if not account_id:
+                    print(f"❌ CRITICAL: Could not determine Account ID for {controller}")
+                    print("   Please provide APPD_ACCOUNT_IDS environment variable")
+                    print("   OR ensure API access to /controller/api/accounts/myaccount")
+                    raise Exception(f"Account ID required for controller {controller}")
+                any_ids_discovered = True
+
+            # Track account ID for this controller (in order)
+            discovered_account_ids.append(account_id)
 
             # Fetch applications from this controller
             apps = fetch_applications(controller, account, client_id, client_secret)
@@ -571,8 +689,8 @@ def run_appd_extract():
             # Step 5: Upsert applications to database (AppD fields + h-code from tags)
             app_id_map = upsert_applications(conn, controller, apps, node_counts, app_tags)
 
-            # Step 6: Generate usage data based on application metadata
-            usage_rows = generate_usage_data(conn, app_id_map)
+            # Step 6: Fetch REAL license usage data from AppDynamics Licensing API
+            usage_rows = generate_usage_data_from_api(conn, controller, account, client_id, client_secret, account_id, app_id_map)
 
             # Step 7: Calculate costs from usage
             cost_rows = calculate_costs(conn)
@@ -612,6 +730,9 @@ def run_appd_extract():
         print(f"   • Total H-code populated: {total_h_code_count} ({round(total_h_code_count/total_apps*100, 1) if total_apps > 0 else 0}%)")
         print(f"   • Total Usage records: {total_usage_rows}")
         print(f"   • Total Cost records: {total_cost_rows}")
+        if any_ids_discovered:
+            print(f"   • Account IDs discovered: {', '.join(discovered_account_ids)}")
+            print(f"   💡 Run scripts/utils/discover_appd_account_ids.py --save-to-ssm to persist")
         print()
         print("ℹ️  Next: Run ServiceNow enrichment to add CMDB data")
         print("=" * 60)

@@ -105,9 +105,23 @@ Store these in AWS SSM Parameter Store:
 
 **AppDynamics:**
 - `/pepsico/appdynamics/CONTROLLER` (comma-separated for multi-controller)
-- `/pepsico/appdynamics/ACCOUNT` (comma-separated)
+- `/pepsico/appdynamics/ACCOUNT` (comma-separated account names)
+- `/pepsico/appdynamics/ACCOUNT_ID` (comma-separated numeric account IDs - **OPTIONAL**, can be auto-discovered)
 - `/pepsico/appdynamics/CLIENT_NAME` (comma-separated)
 - `/pepsico/appdynamics/CLIENT_SECRET` (comma-separated, encrypted)
+
+**How to Get ACCOUNT_ID:**
+1. **Option 1 (Recommended):** Leave blank - will be auto-discovered and saved to SSM automatically
+   - First ETL run: Discovers via API call to `/controller/api/accounts/myaccount`
+   - Saves to SSM: `/pepsico/appdynamics/ACCOUNT_ID` (comma-separated, matches controller order)
+   - Future ETL runs: Uses saved value from SSM (no redundant API calls)
+   - Requires IAM permission: `ssm:PutParameter` (otherwise re-discovers each run)
+2. **Option 2:** Customer provides: Login to AppD → Settings → License → "Account ID"
+3. **Multi-controller example:**
+   ```bash
+   # 2 controllers = 2 account IDs (comma-separated, in order)
+   APPD_ACCOUNT_IDS="12345,67890"
+   ```
 
 **ServiceNow:**
 - `/pepsico/servicenow/INSTANCE`
@@ -116,15 +130,91 @@ Store these in AWS SSM Parameter Store:
 
 ---
 
+## ✅ Verifying Real vs Mock Data
+
+**IMPORTANT:** All mock/synthetic data generation has been **completely removed** from production ETL scripts. The system ONLY pulls real license usage data from AppDynamics Licensing API.
+
+### How to Verify You're Getting Real Data
+
+**1. Check ETL Output Logs**
+
+When running the ETL pipeline, look for these messages:
+```
+✅ Auto-discovered Account ID: 12345  (if not provided in env vars)
+✅ Fetched license usage data from AppDynamics API
+✅ Inserted X usage records from AppDynamics API
+```
+
+**If the API is unavailable, the ETL will FAIL:**
+```
+❌ CRITICAL: AppDynamics Licensing API is unavailable
+   Cannot proceed without real license usage data
+   Please verify:
+   - Account ID is correct: 12345
+   - Controller URL is accessible: https://...
+   - OAuth credentials are valid
+   - Network connectivity to AppDynamics
+```
+
+**No fallback to estimated/synthetic data** - the pipeline fails gracefully and logs the error.
+
+**2. Verify Environment Variables (Optional)**
+
+AppDynamics account IDs are **optional** - they will be auto-discovered if not provided:
+```bash
+# Check if APPD_ACCOUNT_IDS is set (optional)
+echo $APPD_ACCOUNT_IDS
+
+# If empty or not set, the ETL will auto-discover it
+# If set, should be comma-separated numeric account IDs:
+# Example: "12345,67890"
+```
+
+**3. Query the Database**
+
+Check for usage data with timestamps matching real AppDynamics data:
+```sql
+-- Check recent usage data
+SELECT
+    ts,
+    COUNT(*) as records,
+    SUM(units_consumed) as total_units
+FROM license_usage_fact
+WHERE ts >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY ts
+ORDER BY ts DESC;
+
+-- If you see consistent daily records with realistic unit counts,
+-- you're getting real data
+```
+
+**4. Compare with AppDynamics UI**
+
+Log into your AppDynamics controller and compare:
+- License usage numbers in AppD UI
+- Usage numbers in your dashboards
+- They should match closely (within normal variance)
+
+### Mock Data Scripts (Demo/Testing Only)
+
+The following scripts generate synthetic data for **demo and testing purposes only**:
+- [scripts/utils/populate_demo_data.py](../scripts/utils/populate_demo_data.py) - DO NOT run in production
+
+These are **not** part of the production ETL pipeline and should only be used in isolated test environments.
+
+---
+
 ## 🔄 ETL Pipeline Execution Order
 
 The pipeline automatically runs in this order:
 
 1. **Phase 1: AppDynamics Extract** (`appd_extract.py`)
-   - Fetches applications, usage, costs from AppDynamics controllers
+   - Fetches REAL license usage data via AppDynamics Licensing API (`/controller/licensing/usage/account/{accountId}`)
+   - Fetches application metadata from AppDynamics controllers
    - Extracts H-code from AppD tags
-   - Determines Peak vs Pro tier
+   - Determines Peak vs Pro tier from API response
    - Classifies Monolith vs Microservices architecture
+   - **Note:** Falls back to node-based estimation only if Licensing API is unavailable
 
 2. **Phase 2: ServiceNow Enrichment** (`snow_enrichment.py`)
    - Targeted CMDB lookups (only for AppD apps)

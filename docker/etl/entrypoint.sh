@@ -100,10 +100,21 @@ export APPD_CLIENT_SECRET=$(aws ssm get-parameter \
     --query 'Parameter.Value' \
     --output text 2>/dev/null || echo "")
 
+export APPD_ACCOUNT_ID=$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/appdynamics/ACCOUNT_ID" \
+    --region ${AWS_REGION} \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || echo "")
+
 if [ -n "$APPD_CONTROLLER" ]; then
     echo -e "${GREEN}✓ AppDynamics credentials retrieved${NC}"
     echo "  Controller: $APPD_CONTROLLER"
     echo "  Account: $APPD_ACCOUNT"
+    if [ -n "$APPD_ACCOUNT_ID" ]; then
+        echo "  Account ID: $APPD_ACCOUNT_ID (from SSM)"
+    else
+        echo "  Account ID: Will be auto-discovered"
+    fi
 else
     echo -e "${YELLOW}⚠ AppDynamics credentials not found (skipping)${NC}"
 fi
