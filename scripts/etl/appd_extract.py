@@ -382,7 +382,7 @@ def get_account_id(controller, account, client_id, client_secret):
     try:
         response = appd_api_get(
             controller, account, client_id, client_secret,
-            "controller/api/accounts/myaccount",
+            "api/accounts/myaccount",
             suppress_404=False
         )
 
@@ -437,7 +437,7 @@ def fetch_license_usage(controller, account, client_id, client_secret, account_i
 
         usage_data = appd_api_get(
             controller, account, client_id, client_secret,
-            f"controller/licensing/usage/account/{account_id}",
+            f"licensing/usage/account/{account_id}",
             params=params,
             suppress_404=False
         )
