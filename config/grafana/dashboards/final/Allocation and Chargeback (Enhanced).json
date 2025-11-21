@@ -18,6 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
+  "id": 0,
   "links": [],
   "panels": [
     {
@@ -82,11 +83,11 @@
           "fields": "",
           "values": false
         },
-        "showPercentChange": true,
+        "showPercentChange": false,
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -143,7 +144,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -200,7 +201,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -265,7 +266,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -348,7 +349,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -438,12 +439,12 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  month_start as time,\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary) - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name IN (\n    SELECT sector_name\n    FROM mv_monthly_chargeback_summary\n    WHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n    GROUP BY sector_name\n    ORDER BY SUM(total_amount) DESC\n    LIMIT 5\n  )\nGROUP BY month_start, sector_name\nORDER BY month_start, sector_name",
+          "rawSql": "SELECT\n  month_start as time,\n  sector_name as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= DATE_TRUNC('month', (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary) - INTERVAL '12 months')\n  AND ('$controller' = 'All' OR controller = '$controller')\n  AND sector_name IN (\n    SELECT sector_name\n    FROM mv_monthly_chargeback_summary\n    WHERE month_start = (SELECT MAX(month_start) FROM mv_monthly_chargeback_summary)\n    GROUP BY sector_name\n    ORDER BY SUM(total_amount) DESC\n    LIMIT 5\n  )\nGROUP BY month_start, sector_name\nORDER BY month_start, sector_name",
           "refId": "A"
         }
       ],
@@ -506,7 +507,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 13,
         "w": 24,
         "x": 0,
         "y": 15
@@ -534,7 +535,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -569,7 +570,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 28
       },
       "id": 8,
       "options": {
@@ -600,7 +601,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -671,7 +672,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 28
       },
       "id": 9,
       "options": {
@@ -690,12 +691,12 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  month_start as time,\n  'Total Chargeback' as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= NOW() - INTERVAL '24 months'\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY month_start\nORDER BY month_start",
+          "rawSql": "SELECT\n  month_start as time,\n  'Total Chargeback' as metric,\n  SUM(total_amount) as value\nFROM mv_monthly_chargeback_summary\nWHERE month_start >= DATE_TRUNC('month', NOW() - INTERVAL '24 months')\n  AND ('$controller' = 'All' OR controller = '$controller')\nGROUP BY month_start\nORDER BY month_start",
           "refId": "A"
         }
       ],
@@ -708,7 +709,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 36
       },
       "id": 102,
       "panels": [],
@@ -758,10 +759,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 6,
+        "h": 8,
+        "w": 12,
         "x": 0,
-        "y": 32
+        "y": 37
       },
       "id": 10,
       "options": {
@@ -779,7 +780,7 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -811,10 +812,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 18,
-        "x": 6,
-        "y": 32
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
       },
       "id": 11,
       "options": {
@@ -846,7 +847,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -904,7 +905,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 45
       },
       "id": 12,
       "options": {
@@ -929,7 +930,7 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
@@ -947,7 +948,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 53
       },
       "id": 103,
       "panels": [],
@@ -1013,7 +1014,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 54
       },
       "id": 13,
       "options": {
@@ -1031,12 +1032,12 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.0-19174562009.patch3",
+      "pluginVersion": "12.4.0-19378664917",
       "targets": [
         {
           "datasource": "Pepsico Cost Analytics",
           "format": "time_series",
-          "rawSql": "SELECT\n  month_start as time,\n  CASE\n    WHEN chargeback_cycle = 'direct' THEN 'Direct Costs'\n    WHEN chargeback_cycle = 'shared' THEN 'Shared Services'\n    ELSE 'Other Allocations'\n  END as metric,\n  SUM(usd_amount) as value\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE month_start >= NOW() - INTERVAL '12 months'\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY month_start, chargeback_cycle\nORDER BY month_start",
+          "rawSql": "SELECT\n  month_start as time,\n  CASE\n    WHEN chargeback_cycle = 'direct' THEN 'Direct Costs'\n    WHEN chargeback_cycle = 'shared' THEN 'Shared Services'\n    ELSE 'Other Allocations'\n  END as metric,\n  SUM(usd_amount) as value\nFROM chargeback_fact c\nJOIN applications_dim a ON c.app_id = a.app_id\nWHERE month_start >= DATE_TRUNC('month', NOW() - INTERVAL '12 months')\n  AND ('$controller' = 'All' OR a.appd_controller = '$controller')\nGROUP BY month_start, chargeback_cycle\nORDER BY month_start",
           "refId": "A"
         }
       ],
@@ -1045,7 +1046,7 @@
     }
   ],
   "preload": false,
-  "refresh": "1h",
+  "refresh": "auto",
   "schemaVersion": 42,
   "tags": [
     "v3",
@@ -1090,12 +1091,12 @@
     ]
   },
   "time": {
-    "from": "now-90d",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Allocation and Chargeback (Enhanced) - v3",
   "uid": "allocation-chargeback-enhanced-v3",
-  "version": 5
+  "version": 10
 }
