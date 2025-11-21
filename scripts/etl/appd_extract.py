@@ -460,106 +460,13 @@ def fetch_license_usage(controller, account, client_id, client_secret, account_i
         print(f"   ETL will terminate - real license data is required")
         return None
 
-def generate_usage_data_mock(conn, app_id_map):
-    """
-    FALLBACK: Generate mock usage data for demo purposes
-
-    This function is used ONLY when AppDynamics Licensing API is unavailable.
-    It generates realistic usage patterns based on node counts.
-
-    ⚠️  FOR DEMO PURPOSES ONLY - NOT PRODUCTION DATA
-    """
-    print("")
-    print("=" * 80)
-    print("⚠️  WARNING: USING MOCK DATA GENERATION (DEMO MODE)")
-    print("=" * 80)
-    print("AppDynamics Licensing API is unavailable. Generating mock data for demo.")
-    print("This is NOT real production data - waiting for client API permissions.")
-    print("=" * 80)
-    print("")
-
-    cur = conn.cursor()
-
-    # Get capability IDs
-    cur.execute("SELECT capability_id, capability_code FROM capabilities_dim")
-    caps = {row[1]: row[0] for row in cur.fetchall()}
-
-    # Get application metadata to derive usage
-    data = []
-    now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    start_date = now - timedelta(days=365)  # 12 months per SOW
-
-    for appd_id, db_app_id in app_id_map.items():
-        # Get app metadata
-        cur.execute(
-            "SELECT metadata, license_tier FROM applications_dim WHERE app_id = %s",
-            (db_app_id,)
-        )
-        row = cur.fetchone()
-        if not row:
-            continue
-
-        metadata, license_tier = row
-        node_count = metadata.get('node_count', 1) if metadata else 1
-        tier_count = metadata.get('tier_count', 1) if metadata else 1
-
-        # Generate daily usage records for last 12 months
-        # Usage is based on node count (each node consumes units)
-        current = start_date
-        while current <= now:
-            # APM units: roughly node_count * 1.5 (varies by day)
-            apm_units = round(node_count * 1.5 * (0.9 + 0.2 * (current.day % 7) / 7), 2)
-
-            # MRUM units: roughly tier_count * 100 (web traffic)
-            mrum_units = round(tier_count * 100 * (0.8 + 0.4 * (current.day % 7) / 7), 2)
-
-            # Insert APM usage
-            if 'APM' in caps:
-                data.append((
-                    current,
-                    db_app_id,
-                    caps['APM'],
-                    license_tier,
-                    apm_units,
-                    node_count
-                ))
-
-            # Insert MRUM usage
-            if 'MRUM' in caps:
-                data.append((
-                    current,
-                    db_app_id,
-                    caps['MRUM'],
-                    license_tier,
-                    mrum_units,
-                    tier_count
-                ))
-
-            current += timedelta(days=1)
-
-    # Bulk insert usage records
-    if data:
-        cur.executemany("""
-            INSERT INTO license_usage_fact
-            (ts, app_id, capability_id, tier, units_consumed, nodes_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT DO NOTHING
-        """, data)
-
-        conn.commit()
-        print(f"✅ Inserted {len(data)} mock usage records (12 months)")
-    else:
-        print("⚠️  No usage data generated")
-
-    cur.close()
-    return len(data)
-
 def generate_usage_data_from_api(conn, controller, account, client_id, client_secret, account_id, app_id_map):
     """
     Fetch REAL license usage data from AppDynamics Licensing API
-    Falls back to mock data generation if API is unavailable (for demo purposes)
+
+    PRODUCTION VERSION: No fallback - fails fast if API unavailable
     """
-    print("📊 Attempting to fetch license usage from AppDynamics API...")
+    print("📊 Fetching license usage from AppDynamics Licensing API v1...")
 
     cur = conn.cursor()
 
@@ -594,14 +501,42 @@ def generate_usage_data_from_api(conn, controller, account, client_id, client_se
     )
 
     if usage_data is None:
-        # API request failed - use mock data fallback for demo
-        print("⚠️  AppDynamics Licensing API is unavailable")
-        print("   Falling back to mock data generation for demo purposes")
-        print("   IMPORTANT: Client must grant License API permissions for production use")
+        # API request failed - terminate ETL
+        print("")
+        print("=" * 80)
+        print("❌ CRITICAL ERROR: AppDynamics Licensing API Unavailable")
+        print("=" * 80)
+        print("")
+        print("The ETL pipeline requires real license usage data from AppDynamics.")
+        print("The Licensing API v1 is currently unavailable or not accessible.")
+        print("")
+        print("TROUBLESHOOTING STEPS:")
+        print("")
+        print("1. Verify OAuth client has 'License Admin' role:")
+        print(f"   Controller: {controller}")
+        print(f"   Account: {account}")
+        print("   Required permissions: READ LICENSE_USAGE, READ ACCOUNT_LICENSE")
+        print("")
+        print("2. Check if Licensing API v1 is enabled:")
+        print("   Run: ./scripts/utils/test_all_prod_controllers.sh")
+        print(f"   Endpoint: https://{controller}/controller/licensing/v1/usage/account/{account_id}")
+        print("")
+        print("3. If API returns HTTP 500 (Not supported for Agent):")
+        print("   - Contact AppDynamics Support")
+        print("   - Verify licensing model (agent-based vs infrastructure-based)")
+        print("   - Request API enablement or alternative endpoint")
+        print("")
+        print("4. Review documentation:")
+        print("   - docs/CLIENT_REQUIREMENTS_DETAILED.md")
+        print("   - docs/LICENSING_API_MANUAL_TEST_GUIDE.md")
+        print("   - docs/PIPELINE_TROUBLESHOOTING.md")
+        print("")
+        print("=" * 80)
+        print("ETL pipeline terminated. Cannot proceed without real license data.")
+        print("=" * 80)
         print("")
         cur.close()
-        # Call mock data generation function
-        return generate_usage_data_mock(conn, app_id_map)
+        raise Exception("AppDynamics Licensing API unavailable - ETL terminated")
 
     # Process API v1 response format
     # Response structure: { accountId, packages: [{ name, unitUsages: [{ usageType, data: [{ timestamp, used: { avg } }] }] }] }

@@ -3,6 +3,9 @@
 **Created:** 2025-11-21
 **Demo Date:** TODAY
 **Audience:** Internal Team
+**Branch:** `deploy-docker` (Demo branch with mock data fallback)
+
+**NOTE:** This document describes the demo strategy for the branch with mock data fallback. For production deployment, use the `production-api-only` branch.
 
 ---
 

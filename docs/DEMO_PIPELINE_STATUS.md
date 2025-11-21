@@ -3,6 +3,9 @@
 **Updated:** 2025-11-21
 **Demo:** TODAY (Internal Team)
 **Status:** ✅ DEMO READY (Mock Data Fallback Enabled)
+**Branch:** `deploy-docker` (Demo branch with mock data fallback)
+
+**NOTE:** This document describes the demo-ready branch. For production deployment, see the `production-api-only` branch which has all mock data functionality removed.
 
 ---
 
